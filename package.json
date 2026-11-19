@@ -18,6 +18,8 @@
     "node": ">=20"
   },
   "scripts": {
+    "console": "node scripts/console.mjs",
+    "console:demo": "node scripts/console.mjs --demo",
     "test": "node scripts/test.mjs",
     "package": "node scripts/package.mjs",
     "manifests:check": "node scripts/manifests.mjs --check",

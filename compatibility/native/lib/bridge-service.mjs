@@ -15,6 +15,7 @@ import { openDaemon, listTerminalThreads, readDaemonVersions, readTerminalThread
   queueToTerminalThread, queueRefusal, queueTargetRefusal, TerminalNotLoadedError, DaemonUnavailableError, NOT_RUNNING_MESSAGE, scrubPaths } from './codex-daemon.mjs';
 import { codexPeerContent } from './codex-peer.mjs';
 import { validateSshHostAlias } from './codex-ssh.mjs';
+import { readState, updateState, applyAgentPost, consumePeerBudget, AGENT_LABEL } from './console-state.mjs';
 
 export function codexThreadId(metadata = {}) {
   let turn = metadata['x-codex-turn-metadata'];
@@ -431,6 +432,44 @@ async function bridgeDoctor(context, config) {
   return { application, ready: (acceptedContext || (daemonReachable && terminalSessions > 0)) && inboxAvailable && checks.every(check => check.status !== 'fail'), checks };
 }
 
+async function listCodexThreadsAs(who, config, limit, signal) {
+  const context = { signal };
+  const ssh = sshHost(config);
+  if (ssh) return { threads: (await listCodexChats({ ...ssh, limit, signal: context.signal }))
+    .map(chat => publicThread({ ...chat, source: 'ssh' })), warnings: [] };
+  const warnings = [];
+  let chats = [];
+  let desktopFailed = false;
+  let terminalFailed = false;
+  try {
+    // The listing itself proves the context; a separate one-chat probe would double the wait.
+    const found = await desktopRoute(who, config, context.signal, { limit });
+    const desktop = found.chats ?? await listCodexChats({ pipePath: found.host.pipePath, contextThreadId: found.host.threadId,
+      limit, signal: context.signal });
+    chats = desktop.map(chat => ({ ...chat, source: 'desktop' }));
+  } catch (error) {
+    checkCancellation(context.signal);
+    desktopFailed = true;
+    warnings.push(`Codex Desktop unavailable: ${error.message}`);
+  }
+  try {
+    const terminal = await withDaemon(config, context.signal, connection => listTerminalThreads(connection,
+      { limit, signal: context.signal, timeoutMs: PROBE_TIMEOUT_MS }), { timeoutMs: PROBE_TIMEOUT_MS });
+    // Source names describe discovery transports, not the thread's current client.
+    // Retain the Desktop title and metadata when both transports list the same ID.
+    const desktopIds = new Set(chats.map(chat => chat.thread_id));
+    chats = [...chats, ...terminal.filter(chat => !desktopIds.has(chat.thread_id))];
+  } catch (error) {
+    checkCancellation(context.signal);
+    terminalFailed = true;
+    if (shouldReportTerminalUnavailable(error, !desktopFailed)) {
+      warnings.push(`Codex terminal sessions unavailable: ${error.message}`);
+    }
+  }
+  if (desktopFailed && terminalFailed) throw new Error(warnings.join(' '));
+  return { threads: chats.map(publicThread), warnings };
+}
+
 export async function executeBridgeTool(name, args = {}, context = {}) {
   checkCancellation(context.signal);
   const config = settings(context);
@@ -459,43 +498,8 @@ export async function executeBridgeTool(name, args = {}, context = {}) {
     return { owner_thread_id: who.threadId, application: 'codex', sessions: catalog.conversations, warnings: catalog.warnings,
       composer_enter_behavior: readComposerEnterBehavior({ env: config.env }) };
   }
-  if (name === 'list_codex_threads') {
-    const limit = args.limit || 30;
-    const ssh = sshHost(config);
-    if (ssh) return { threads: (await listCodexChats({ ...ssh, limit, signal: context.signal }))
-      .map(chat => publicThread({ ...chat, source: 'ssh' })), warnings: [] };
-    const warnings = [];
-    let chats = [];
-    let desktopFailed = false;
-    let terminalFailed = false;
-    try {
-      // The listing itself proves the context; a separate one-chat probe would double the wait.
-      const found = await desktopRoute(who, config, context.signal, { limit });
-      const desktop = found.chats ?? await listCodexChats({ pipePath: found.host.pipePath, contextThreadId: found.host.threadId,
-        limit, signal: context.signal });
-      chats = desktop.map(chat => ({ ...chat, source: 'desktop' }));
-    } catch (error) {
-      checkCancellation(context.signal);
-      desktopFailed = true;
-      warnings.push(`Codex Desktop unavailable: ${error.message}`);
-    }
-    try {
-      const terminal = await withDaemon(config, context.signal, connection => listTerminalThreads(connection,
-        { limit, signal: context.signal, timeoutMs: PROBE_TIMEOUT_MS }), { timeoutMs: PROBE_TIMEOUT_MS });
-      // Source names describe discovery transports, not the thread's current client.
-      // Retain the Desktop title and metadata when both transports list the same ID.
-      const desktopIds = new Set(chats.map(chat => chat.thread_id));
-      chats = [...chats, ...terminal.filter(chat => !desktopIds.has(chat.thread_id))];
-    } catch (error) {
-      checkCancellation(context.signal);
-      terminalFailed = true;
-      if (shouldReportTerminalUnavailable(error, !desktopFailed)) {
-        warnings.push(`Codex terminal sessions unavailable: ${error.message}`);
-      }
-    }
-    if (desktopFailed && terminalFailed) throw new Error(warnings.join(' '));
-    return { threads: chats.map(publicThread), warnings };
-  }
+  if (name === 'console_post') return consolePost(who, args, config);
+  if (name === 'list_codex_threads') return listCodexThreadsAs(who, config, args.limit || 30, context.signal);
   if (name === 'list_deliveries') {
     const session = senderLedger(who, config);
     return { application: who.kind, sender_id: sender(who).id,
@@ -523,6 +527,13 @@ export async function executeBridgeTool(name, args = {}, context = {}) {
   const queueRefused = terminalTarget?.queueRoute ? queueTargetRefusal(targetThreadId) || queueRefusal(peerText) : null;
   if (queueRefused) throw new Error(queueRefused);
   checkCancellation(context.signal);
+  // The Bridge Console caps direct AI-to-AI turns between its selected pair until the user speaks
+  // again. Refused before recordMessage, so the message ID is not spent. Manual sends are the user's.
+  if (context.manual !== true) {
+    const budget = consumePeerBudget(config.stateDir, { fromKind: route.from.kind, fromId: route.from.id,
+      toKind: route.to.kind, toId: route.to.id });
+    if (budget && !budget.allowed) throw new Error(`The Bridge Console limits direct AI-to-AI messages between these two sessions to ${budget.limit} per user turn, and that limit is reached. No message was sent. Report to the user with console_post (kind "question" or "progress") and wait for them; the user can allow more exchanges in the console.`);
+  }
   const session = senderLedger(who, config, true);
   checkCancellation(context.signal);
   const reserved = recordMessage(session, { id: messageId, direction, message: args.message, route,
@@ -587,4 +598,109 @@ export async function executeBridgeTool(name, args = {}, context = {}) {
     error.deliveryUnknown = true;
     throw error;
   }
+}
+
+/** console_post: a selected participant reports to the user in the Bridge Console. The caller is
+ * the verified runtime identity, so one session cannot report, acknowledge, or route for another. */
+function consolePost(who, args, config) {
+  const agent = who.kind;
+  const id = agent === 'codex' ? who.threadId : who.endpoint.sessionId;
+  let state;
+  try { state = readState(config.stateDir); } catch (error) { throw new Error(error.message); }
+  const selected = state.selection?.[agent];
+  if (!selected) throw new Error(`The Bridge Console has no ${AGENT_LABEL[agent]} session selected. Nothing was posted.`);
+  if (selected.id !== id) throw new Error(`This ${AGENT_LABEL[agent]} conversation is not the one selected in the Bridge Console. Nothing was posted.`);
+  const result = updateState(config.stateDir, current => {
+    if (current.selection?.[agent]?.id !== id) throw new Error('The Bridge Console selection changed. Nothing was posted.');
+    const { event, applied } = applyAgentPost(current, agent, args);
+    const request = event.requestId ? current.requests.find(r => r.id === event.requestId) : null;
+    return { event_id: event.id, applied, ...(event.note ? { note: event.note } : {}), ...(request ? { request_status: request.status } : {}) };
+  });
+  return { posted: true, ...result };
+}
+
+/** Transport used by the Bridge Console server. The console sends as the user, so it has no caller
+ * identity of its own; it reaches Claude by the selected session's inbox and Codex by the same
+ * routes send_to_codex uses (SSH, daemon or queue, Desktop app-tools). */
+export function consoleTransport(context = {}) {
+  const config = settings(context);
+  const consoleCaller = { kind: 'console' };
+  return {
+    platform: config.platform,
+    async listClaude({ signal } = {}) {
+      const { listClaudeConversations } = await import('./claude-history.mjs');
+      const live = new Map(discoverClaudeSessions({ registryDir: config.registryDir }).map(s => [s.sessionId, s]));
+      let catalog = { conversations: [], warnings: [] };
+      try {
+        catalog = await listClaudeConversations({ registryDir: config.registryDir,
+          projectsDir: path.join(config.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), 'projects'),
+          stateDir: config.stateDir, ownerThreadId: 'bridge-console', signal });
+      } catch (error) { catalog.warnings.push(`Claude history metadata unavailable: ${error.message}`); }
+      const sessions = [...live.values()].map(session => {
+        const known = catalog.conversations.find(c => c.session_id === session.sessionId);
+        return { id: session.sessionId, title: session.name || known?.title || '', cwd: session.cwd || known?.cwd || '',
+          entrypoint: session.entrypoint, status: session.status, live: true, last_activity_at: known?.last_activity_at ?? null };
+      });
+      return { sessions, warnings: catalog.warnings };
+    },
+    async listCodex({ signal, limit = 50 } = {}) {
+      const { threads, warnings } = await listCodexThreadsAs(consoleCaller, config, limit, signal);
+      return { threads: threads.map(t => ({ id: t.thread_id, title: t.title, cwd: t.cwd, status: t.status, source: t.source, host_id: t.host_id })), warnings };
+    },
+    async send({ to, target, message, messageId, signal }) {
+      if (to === 'claude') {
+        const endpoint = resolveClaudeSession(target.id, { registryDir: config.registryDir });
+        const receipt = await sendToClaude({ ...endpoint, message, senderName: 'Bridge Console (user)', signal });
+        return { method: 'claude-inbox', ...receipt };
+      }
+      if (to !== 'codex') throw new Error('Unknown console recipient.');
+      const threadId = normalizeCodexThreadId(target.id);
+      const ssh = sshHost(config);
+      const transport = target.transport || 'auto';
+      if (ssh) return { method: 'ssh', ...(await sendToCodex({ ...ssh, threadId, message, signal })) };
+      if (transport === 'ssh') throw new Error('SSH delivery requires CLAUDE_CODEX_BRIDGE_SSH_HOST on macOS.');
+      const terminalTarget = await resolveTerminalTarget(threadId, transport, config, signal);
+      if (terminalTarget) {
+        const refused = terminalTarget.queueRoute ? queueTargetRefusal(threadId) || queueRefusal(message) : null;
+        if (refused) throw new Error(refused);
+        try {
+          if (terminalTarget.queueOnly) throw new TerminalNotLoadedError('The daemon is unavailable for this explicit terminal route.');
+          const sent = await withDaemon(config, signal, connection => sendToTerminalThread(connection, { threadId, text: message, messageId, signal }));
+          return { method: sent.method, turn_id: sent.turnId ?? null };
+        } catch (error) {
+          if (!(error instanceof TerminalNotLoadedError)) throw error;
+          if (!terminalTarget.allowQueue) throw new Error('The selected Codex session left the daemon before sending. No message was sent. Choose the desktop or terminal route for this session.');
+          const queued = await queueToTerminalThread({ threadId, text: message, env: config.env, signal, ...(config.queue ?? {}) });
+          return { method: 'queue', queue_id: queued.queueId ?? null };
+        }
+      }
+      const desktop = await desktopRoute(consoleCaller, config, signal, { reuse: true });
+      try {
+        await sendToCodex({ pipePath: desktop.host.pipePath, contextThreadId: desktop.host.threadId, catalog: desktop.catalog,
+          threadId, message, signal });
+      } catch (error) {
+        if (acceptedContexts.get(desktop.host.pipePath) === desktop.host.threadId) acceptedContexts.delete(desktop.host.pipePath);
+        throw error;
+      }
+      return { method: 'desktop' };
+    },
+    /** Direct deliveries between the selected pair, read from the bridge's own sender ledgers. */
+    async peerMessages({ codexId, claudeId }) {
+      const records = [];
+      const ledgers = [{ from: 'codex', ledger: codexId, toKind: 'claude', toId: claudeId },
+        { from: 'claude', ledger: `claude:${claudeId}`, toKind: 'codex', toId: codexId }];
+      for (const { from, ledger, toKind, toId } of ledgers) {
+        const session = getSession({ stateDir: config.stateDir, threadId: ledger });
+        if (!session) continue;
+        for (const record of getMessages(session, 200)) {
+          if (record.route?.to?.kind !== toKind || record.route.to.id !== toId) continue;
+          if (record.route.from?.id !== (from === 'codex' ? codexId : claudeId)) continue;
+          records.push({ key: `${from}:${record.id}:${toId}`, from, to: toKind, message: record.message, status: record.status,
+            error: typeof record.error === 'string' ? record.error : record.error?.message ?? null,
+            createdAt: record.createdAt, manual: Boolean(record.manual) });
+        }
+      }
+      return records;
+    },
+  };
 }

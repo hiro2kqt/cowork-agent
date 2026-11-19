@@ -15,6 +15,7 @@ export const COMMON_RUNTIME_FILES = [
   'lib/store.mjs', 'lib/state-directory.mjs', 'lib/delivery.mjs', 'lib/legacy-environment.mjs', 'lib/claude-sessions.mjs', 'lib/claude-process.mjs', 'lib/local-socket.mjs', 'lib/codex-desktop.mjs', 'lib/codex-ssh.mjs',
   'lib/bridge-service.mjs', 'lib/codex-host.mjs', 'scripts/mcp.mjs',
   'lib/claude-history.mjs', 'lib/bridge-history.mjs', 'lib/manual-service.mjs', 'lib/codex-settings.mjs', 'lib/ws-jsonrpc.mjs', 'lib/codex-binary.mjs', 'lib/codex-daemon.mjs', 'lib/codex-peer.mjs', 'ui/bridge.html',
+  'lib/console-state.mjs', 'lib/console-engine.mjs', 'lib/console-demo.mjs', 'scripts/console.mjs', 'ui/console.html', 'docs/CONSOLE.md',
   'scripts/manifests.mjs', 'scripts/install.mjs', 'skills/bridge/SKILL.md',
   'package.json', 'README.md', 'LICENSE', 'SECURITY.md', 'docs/PRIVACY.md', 'docs/PUBLISHING.md', 'docs/TERMS.md',
   'assets/bridge.svg', 'assets/bridge-dark.svg',

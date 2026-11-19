@@ -1,5 +1,7 @@
 # Claude–Codex Bridge
 
+> This repository is based on [KeeVeeG/claude-codex-bridge](https://github.com/KeeVeeG/claude-codex-bridge) 1.0.6 (MIT, © 2026 KeeVeeG) and adds the **Bridge Console** (see [docs/CONSOLE.md](docs/CONSOLE.md)). Everything installs and runs from this one checkout: `node scripts/install.mjs`, then `node scripts/console.mjs`.
+
 [![Windows and macOS CI](https://github.com/KeeVeeG/claude-codex-bridge/actions/workflows/test.yml/badge.svg)](https://github.com/KeeVeeG/claude-codex-bridge/actions/workflows/test.yml)
 
 Two-way messaging between **Claude Code** and **Codex** conversations. Works with Claude and Codex in their desktop apps and terminals, in any combination. Either side can start, ask, share progress, or reply whenever useful. Every message names its exact recipient: there is no pairing step, deadline, or mandatory reply. The bridge carries text through ordinary MCP tools and leaves its meaning to the participants.
@@ -67,6 +69,7 @@ Version 1.0.0 renamed the plugin from `codex-claude-desktop-bridge` to `bridge-c
 | `send_to_codex` | Send `message` to `thread_id`; optional `transport`: `auto`, `desktop`, `terminal`, or `ssh`. |
 | `list_deliveries` | Your recent outgoing deliveries (`limit` 1–100); read-only. |
 | `bridge_doctor` | Check transports, caller identity, and state without sending anything. From a Codex Desktop task it also registers that task for discovery from Claude. |
+| `console_post` | Report to the user in the Bridge Console (read, progress, question, done, routing decision). Only the sessions selected in the console can post. |
 | `bridge_panel` | Codex Desktop only: open a panel beside the current chat to browse Claude conversations and message them by hand. |
 
 `panel_history`, `panel_send`, and `panel_retry_notice` serve the panel.
@@ -80,6 +83,8 @@ Incoming messages name their verified source, so a reply is just another `send_*
 `submitted` means handed to the receiving application, not read. An optional `message_id` (1–100 ASCII letters, digits, `_`, `-`; not a JavaScript built-in name such as `constructor`) makes a repeated call safe: from the same conversation, with the same recipient, ID, and text, it never delivers twice and reports the earlier outcome instead. A failed or uncertain send is never resent automatically. An uncertain one may still arrive, so check the destination and `list_deliveries` before sending it again under a new ID. Cancelling a call that already wrote its message marks it `uncertain`; nothing can be recalled. Only transport requests time out; nobody has a deadline to answer.
 
 **Conversation panel.** Codex Desktop can show MCP App panels, so the bridge offers one there. It lists the Claude conversations this Codex chat has exchanged messages with and all discoverable local ones, shows the bridge messages exchanged with the selected one, and lets you send manually. A manual send also adds a short notice to the owning Codex chat. Enter behavior follows Codex's `desktop.composerEnterBehavior`. The panel needs a local Codex Desktop chat in a host with MCP Apps support; the macOS SSH route does not provide it. `ui/bridge.html#demo` previews it with labelled fixture data.
+
+**Bridge Console.** A local web page to coordinate one Codex chat and one Claude Code session together: pick both sessions and a router, send `@codex` / `@claude` / `@all` or unaddressed requests from one composer, answer the router's clarifying questions, and follow each recipient's delivery, read, and done status and the AI-to-AI exchange in one saved history. Start it with `node scripts/console.mjs` (or `--demo` for simulated sessions). Agents report back with the `console_post` tool. See [docs/CONSOLE.md](docs/CONSOLE.md).
 
 ### Codex transports on Windows
 

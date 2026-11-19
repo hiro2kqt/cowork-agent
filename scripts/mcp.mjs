@@ -161,6 +161,22 @@ export const TOOLS = [
       notice_status: { type: 'string', enum: ['submitted', 'failed', 'uncertain', 'pending'] } }, ['delivery', 'manual', 'notice_status']),
     _meta: appToolMeta,
   },
+  {
+    name: 'console_post',
+    title: 'Report to the user in the Bridge Console',
+    description: 'Post a short report to the user in the Bridge Console, for a request you received from it (its message starts with "[Bridge Console · request #R…]"). Use kind "ack" once you have read the request, "progress" for updates, "question" to ask the user, "done" when your assigned work is finished, "blocked" if you cannot continue, and "reply" for a plain answer. The selected router answers a ROUTING ONLY request with kind "route" and assignee codex, claude, both, or unclear. Works only from the Claude or Codex conversation the user selected in the console; the caller is verified. Writes only local console state; sends nothing to the other agent.',
+    inputSchema: schema({
+      kind: { type: 'string', enum: ['ack', 'progress', 'done', 'blocked', 'question', 'reply', 'route'], description: 'What this report is.' },
+      request_id: { ...textProperty('Console request ID such as R12, from the request header.', 20), pattern: '^R[0-9]{1,9}$' },
+      message: textProperty('Text shown to the user. Required except for ack and route.', 65536),
+      assignee: { type: 'string', enum: ['codex', 'claude', 'both', 'unclear'], description: 'kind route only: who should carry out the request.' },
+      interpretation: textProperty('kind route only: your reading of the request, shown to the user and the assignee as the router\'s words.', 8000),
+      question: textProperty('kind route with assignee unclear or both: the clarifying question for the user.', 2000),
+      options: { type: 'array', maxItems: 6, items: textProperty('One choice for the user.', 200), description: 'kind route only: suggested choices.' },
+    }, ['kind']),
+    outputSchema: schema({ posted: { type: 'boolean' }, event_id: outputText, applied: { type: 'boolean' }, note: outputText,
+      request_status: outputText }, ['posted', 'event_id', 'applied']),
+  },
 ];
 
 // Sends are destructive: they cannot be recalled or safely repeated. bridge_doctor only
@@ -168,7 +184,7 @@ export const TOOLS = [
 const SENDING = ['send_to_claude', 'send_to_codex', 'panel_send', 'panel_retry_notice'];
 for (const tool of TOOLS) {
   const sending = SENDING.includes(tool.name);
-  tool.annotations = { readOnlyHint: !sending && tool.name !== 'bridge_doctor', destructiveHint: sending,
+  tool.annotations = { readOnlyHint: !sending && !['bridge_doctor', 'console_post'].includes(tool.name), destructiveHint: sending,
     openWorldHint: false, idempotentHint: !sending };
 }
 
@@ -184,6 +200,9 @@ function validateValue(value, specification, name) {
     if (!Number.isInteger(value) || value < specification.minimum || value > specification.maximum) {
       throw new Error(`${name} must be an integer from ${specification.minimum} to ${specification.maximum}.`);
     }
+  } else if (specification.type === 'array') {
+    if (!Array.isArray(value) || value.length > specification.maxItems) throw new Error(`${name} must be an array of at most ${specification.maxItems} items.`);
+    value.forEach((item, index) => validateValue(item, specification.items, `${name}[${index}]`));
   } else {
     throw new Error(`${name} has an unsupported schema type.`);
   }
