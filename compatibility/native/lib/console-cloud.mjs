@@ -31,9 +31,10 @@ export function forgetCloud(stateDir) { fs.rmSync(cloudFile(stateDir), { force: 
 
 /** Keep polling the relay until stop() is called. Reports connection changes through `log`. */
 export function connectCloud({ relay, localPort, token, version, log = () => {} }) {
-  let stopped = false, connected = null;
+  let stopped = false, connected = null, lastError = '';
   const controllers = new Set();
   const status = (online, reason = '') => {
+    if (!online) lastError = reason;
     if (connected === online) return;
     connected = online;
     log(online ? `Cloud: connected to ${relay}` : `Cloud: cannot reach ${relay} (${reason}); retrying.`);
@@ -50,7 +51,7 @@ export function connectCloud({ relay, localPort, token, version, log = () => {} 
     else {
       try {
         const local = await fetch(`http://127.0.0.1:${localPort}${target}`, { method,
-          headers: { 'x-console-token': token, ...(response.headers.get('x-relay-content-type') ? { 'content-type': response.headers.get('x-relay-content-type') } : {}),
+          headers: { 'x-console-token': token, 'x-console-via-relay': '1', ...(response.headers.get('x-relay-content-type') ? { 'content-type': response.headers.get('x-relay-content-type') } : {}),
             ...(response.headers.get('x-relay-file-name') ? { 'x-file-name': response.headers.get('x-relay-file-name') } : {}) },
           body: ['GET', 'HEAD'].includes(method) ? undefined : body });
         code = local.status;
@@ -89,7 +90,8 @@ export function connectCloud({ relay, localPort, token, version, log = () => {} 
   }
 
   for (let i = 0; i < PARALLEL; i++) loop();
-  return { stop() { stopped = true; for (const c of controllers) c.abort(); } };
+  return { stop() { stopped = true; for (const c of controllers) c.abort(); },
+    status: () => ({ url: relay, connected: connected === true, error: connected === false ? lastError : '' }) };
 }
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));

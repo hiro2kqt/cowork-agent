@@ -61,7 +61,7 @@ nginx must pass `X-Real-IP $remote_addr`: the relay checks that this address is 
 node scripts/console.mjs --connect http://console.example.com
 ```
 
-The address is saved in `<state dir>/console/cloud.json`. From then on, the console connects every time it starts, from the shortcut as well, and reconnects by itself after sleep or a network change. `node scripts/console.mjs --disconnect` forgets it.
+Or, without a command: open the console on the laptop, enter the address under **Cloud** in the sidebar, and click *Connect*. The address is saved in `<state dir>/console/cloud.json`. From then on, the console connects every time it starts, from the shortcut as well, and reconnects by itself after sleep or a network change. `node scripts/console.mjs --disconnect` forgets it.
 
 ## Phone
 

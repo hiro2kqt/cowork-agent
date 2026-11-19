@@ -82,7 +82,8 @@ export async function startConsole({ port = 4317, demo = false, stateDir, token 
   }
 
   const routes = {
-    'GET /api/state': () => ({ ...engine.snapshot(), availability, demo, version, platform: transport.platform ?? process.platform,
+    'GET /api/state': (body, req) => ({ ...engine.snapshot(), availability, demo, version, platform: transport.platform ?? process.platform,
+      cloud: cloudLink?.status() ?? null, viaRelay: req.headers['x-console-via-relay'] === '1',
       stateDir: demo ? stateDir : undefined, now: Date.now() }),
     'GET /api/sessions': async () => refreshCatalog(),
     'POST /api/select': async body => { const r = engine.select(body.agent, body.participant ?? null); await refreshCatalog().catch(() => {}); return r; },
@@ -93,6 +94,12 @@ export async function startConsole({ port = 4317, demo = false, stateDir, token 
     'POST /api/retry': body => engine.retry(body),
     'POST /api/peer-grant': () => engine.grantPeerTurns(),
     'POST /api/clear': () => engine.clearHistory(),
+    // Only from this computer: through the relay, a change could cut the phone off or point the laptop elsewhere.
+    'POST /api/cloud': (body, req) => {
+      if (req.headers['x-console-via-relay'] === '1') throw new Error('Change the cloud connection on the laptop itself.');
+      if (body.url !== null && typeof body.url !== 'string') throw new Error('url must be an address or null.');
+      return setCloud(body.url ? body.url.trim() : null);
+    },
   };
 
   const server = http.createServer(async (req, res) => {
@@ -140,7 +147,7 @@ export async function startConsole({ port = 4317, demo = false, stateDir, token 
         for await (const chunk of req) { size += chunk.length; if (size > 512 * 1024) return send(413, { error: 'Request too large.' }); chunks.push(chunk); }
         body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : {};
       }
-      send(200, await handler(body));
+      send(200, await handler(body, req));
     } catch (error) {
       send(400, { error: String(error.message || error) });
     }
@@ -152,8 +159,16 @@ export async function startConsole({ port = 4317, demo = false, stateDir, token 
   });
   const actualPort = server.address().port;
   // Reachable from anywhere through the Bridge Relay, if this state directory was connected to one.
-  const cloud = demo ? null : readCloud(stateDir);
-  const cloudLink = cloud ? connectCloud({ relay: cloud.url, localPort: server.address().port, token, version, log }) : null;
+  let cloud = demo ? null : readCloud(stateDir);
+  let cloudLink = cloud ? connectCloud({ relay: cloud.url, localPort: server.address().port, token, version, log }) : null;
+  /** Connect to a relay (saved for later starts), or disconnect with url null. */
+  function setCloud(url) {
+    if (demo) throw new Error('Not in demo mode.');
+    cloudLink?.stop(); cloudLink = null;
+    if (url) { cloud = saveCloud(stateDir, url); cloudLink = connectCloud({ relay: cloud.url, localPort: server.address().port, token, version, log }); log(`Cloud relay saved: ${cloud.url}`); }
+    else { forgetCloud(stateDir); cloud = null; log('Cloud relay disconnected.'); }
+    return cloudLink?.status() ?? null;
+  }
   const timers = [setInterval(() => engine.tick().catch(error => log(`tick: ${error.message}`)), tickMs),
     setInterval(() => refreshCatalog().catch(error => log(`discovery: ${error.message}`)), availabilityMs)];
   refreshCatalog().catch(error => log(`discovery: ${error.message}`));
@@ -165,7 +180,7 @@ export async function startConsole({ port = 4317, demo = false, stateDir, token 
     try { fs.mkdirSync(path.dirname(serverFile), { recursive: true }); fs.writeFileSync(serverFile, JSON.stringify({ port: actualPort, token, pid: process.pid }), { mode: 0o600 }); }
     catch (error) { log(`Could not record the running console: ${error.message}`); }
   }
-  return { url, port: actualPort, token, stateDir, engine, refreshCatalog, cloud: cloud?.url ?? null,
+  return { url, port: actualPort, token, stateDir, engine, refreshCatalog, cloud: cloud?.url ?? null, setCloud,
     async close() {
       timers.forEach(clearInterval);
       cloudLink?.stop();

@@ -47,7 +47,7 @@ The command prints a URL such as `http://127.0.0.1:4317/#t=…` and opens it in 
 
 **Windows without typing a command:** double-click `Bridge Console.cmd` in the repository folder, or run `node scripts\shortcut.mjs` once to add a **Bridge Console** shortcut to the Desktop and Start Menu (`--remove` deletes them). The shortcut runs minimized; close its window to stop the console. Clicking it again while the console runs just reopens the page.
 
-**From your phone:** see [RELAY.md](RELAY.md). Run a small relay on your server, then `node scripts/console.mjs --connect http://<relay address>` once on the laptop.
+**From your phone:** see [RELAY.md](RELAY.md). Run a small relay on your server, then enter its address under **Cloud** in the console's sidebar and click *Connect* (or run `node scripts/console.mjs --connect <relay address>` once). It is remembered: the console connects every time it starts. *Disconnect* is only available on the laptop itself.
 
 Stop it with Ctrl+C. Your selection, router, roles, and history are saved and shown again next time.
 

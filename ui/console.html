@@ -271,7 +271,7 @@ function openViewer(list, index) {
 async function poll(force) {
   try {
     const state = await api('/api/state');
-    const avail = JSON.stringify(state.availability);
+    const avail = JSON.stringify([state.availability, state.cloud]);
     const changed = force || state.version !== lastVersion || avail !== lastAvail;
     S = state; lastVersion = state.version; lastAvail = avail;
     if (changed) render();
@@ -320,8 +320,34 @@ function renderSide() {
     el('div', { class: 'roles' }, el('div', { class: 'label' }, 'Roles'), ...roles),
     el('div', {}, el('div', { class: 'label' }, 'AI ↔ AI'), el('div', { class: 'row small' },
       el('span', { class: used >= limit ? '' : 'muted', style: used >= limit ? 'color:var(--bad)' : '' }, `${used} / ${limit} messages`),
-      used >= limit || S.peer.blocked ? el('button', { class: 'ghost', onclick: () => act('/api/peer-grant', {}) }, 'Allow more') : null)));
+      used >= limit || S.peer.blocked ? el('button', { class: 'ghost', onclick: () => act('/api/peer-grant', {}) }, 'Allow more') : null)),
+    S.demo ? null : cloudBox());
   if (keep && $(keep)) $(keep).focus();
+}
+
+/* ---------- cloud (Bridge Relay) ---------- */
+function cloudBox() {
+  const c = S.cloud;
+  const state = !c ? null : c.connected ? el('span', { class: 'row small' }, el('span', { class: 'dot ok' }), 'connected')
+    : el('span', { class: 'row small', title: c.error || '' }, el('span', { class: 'dot warn' }), c.error ? `retrying (${c.error})` : 'connecting…');
+  // Opened through the relay: show it, but the connection is changed on the laptop only.
+  if (S.viaRelay) return el('div', {}, el('div', { class: 'label' }, 'Cloud'), el('div', { class: 'small muted' }, c ? new URL(c.url).host : ''), state);
+  if (c) return el('div', {}, el('div', { class: 'label' }, 'Cloud'),
+    el('div', { class: 'row small' }, el('span', { class: 'grow', style: 'overflow:hidden;text-overflow:ellipsis' }, new URL(c.url).host),
+      el('button', { class: 'ghost small', onclick: () => { if (confirm('Disconnect from the cloud relay? The phone loses access until you connect again.')) act('/api/cloud', { url: null }).catch(() => {}); } }, 'Disconnect')),
+    state);
+  const input = el('input', { id: 'cloudUrl', placeholder: 'https://agents.example.com' });
+  input.value = drafts.cloudUrl ?? localStorage.getItem('bridgeConsoleCloud') ?? '';
+  input.addEventListener('input', () => { drafts.cloudUrl = input.value; });
+  const connect = () => {
+    const url = input.value.trim();
+    if (!url) return;
+    localStorage.setItem('bridgeConsoleCloud', url);
+    act('/api/cloud', { url: /^https?:\/\//i.test(url) ? url : `https://${url}` }).then(() => delete drafts.cloudUrl).catch(() => {});
+  };
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') connect(); });
+  return el('div', {}, el('div', { class: 'label' }, 'Cloud'), el('div', { class: 'small muted', style: 'margin-bottom:6px' }, 'Open this console from your phone through a Bridge Relay.'),
+    el('div', { class: 'row' }, input, el('button', { onclick: connect }, 'Connect')));
 }
 
 /* ---------- tabs ---------- */
