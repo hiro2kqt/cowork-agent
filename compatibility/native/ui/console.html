@@ -171,9 +171,21 @@ async function fileUrl(id, mime) {
 const metaOf = id => S?.files?.[id] || attached.find(f => f.id === id) || null;
 /** Hide the "[file …] name: path" lines agents add for each other; the files are shown as tiles. */
 const stripFiles = text => String(text || '').replace(/\n*Attached files \(local copies[^\n]*\):?(\n- \[file [a-f0-9]{16}\][^\n]*)+/g, '').replace(/^- \[file [a-f0-9]{16}\][^\n]*\n?/gm, '').trim();
+// 3D thumbnails are rendered one at a time and kept for the page's lifetime; very large models keep the icon.
+const thumbs = new Map();
+let thumbQueue = Promise.resolve();
+function modelThumb(meta) {
+  if (meta.size > 40 * 1048576 || !window.BridgeViewer) return Promise.resolve(null);
+  if (!thumbs.has(meta.id)) thumbs.set(meta.id, thumbQueue = thumbQueue.catch(() => {}).then(async () => {
+    const model = await window.BridgeViewer.parseModel(meta.name, await (await fileBlob(meta.id)).arrayBuffer());
+    return window.BridgeViewer.snapshot(model, { upAxis: window.BridgeViewer.defaultUp(meta.name), dark: matchMedia('(prefers-color-scheme: dark)').matches });
+  }).catch(() => null));
+  return thumbs.get(meta.id);
+}
 function tile(meta, list, index) {
   const thumb = el('div', { class: 'thumb' }, ICON[meta.kind] || ICON.other);
   if (meta.kind === 'image') fileUrl(meta.id, meta.mime).then(u => thumb.replaceChildren(el('img', { src: u, alt: meta.name }))).catch(() => {});
+  else if (meta.kind === 'model') modelThumb(meta).then(u => { if (u) thumb.replaceChildren(el('img', { src: u, alt: meta.name })); }).catch(() => {});
   return el('button', { class: 'att', title: `${meta.name} · ${bytes(meta.size)}${meta.by ? ` · from ${NAME[meta.by] || meta.by}` : ''}`, onclick: () => openViewer(list, index) },
     thumb, el('span', { class: 'cap' }, meta.name));
 }

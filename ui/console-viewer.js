@@ -344,11 +344,11 @@ float light=0.32+0.62*key+0.18*fill;gl_FragColor=vec4(mix(vColor*light,vColor,uU
   }
 
   /** Show a parsed model in `container`. Returns { destroy, info, setUp }. */
-  function mountModel(container, model, { upAxis = 'z', dark = false } = {}) {
+  function mountModel(container, model, { upAxis = 'z', dark = false, still = null } = {}) {
     const canvas = document.createElement('canvas');
     canvas.style.cssText = 'width:100%;height:100%;display:block;touch-action:none;cursor:grab';
-    container.append(canvas);
-    const gl = canvas.getContext('webgl', { antialias: true }) || fail('WebGL is not available in this browser.');
+    if (still) { canvas.width = still.width; canvas.height = still.height; } else container.append(canvas);
+    const gl = canvas.getContext('webgl', { antialias: true, preserveDrawingBuffer: Boolean(still) }) || fail('WebGL is not available in this browser.');
     const uint = gl.getExtension('OES_element_index_uint'); void uint;
     const compile = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
       if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) fail(gl.getShaderInfoLog(s)); return s; };
@@ -403,7 +403,7 @@ float light=0.32+0.62*key+0.18*fill;gl_FragColor=vec4(mix(vColor*light,vColor,uU
     function draw() {
       frame = 0;
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      const w = Math.max(1, Math.round(canvas.clientWidth * dpr)), h = Math.max(1, Math.round(canvas.clientHeight * dpr));
+      const w = still ? still.width : Math.max(1, Math.round(canvas.clientWidth * dpr)), h = still ? still.height : Math.max(1, Math.round(canvas.clientHeight * dpr));
       if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
       gl.viewport(0, 0, w, h);
       const bg = dark ? [0.11, 0.11, 0.105] : [0.97, 0.97, 0.96];
@@ -443,6 +443,13 @@ float light=0.32+0.62*key+0.18*fill;gl_FragColor=vec4(mix(vColor*light,vColor,uU
     });
     canvas.addEventListener('wheel', e => { e.preventDefault(); dist = Math.max(radius * 0.05, Math.min(radius * 40, dist * Math.exp(e.deltaY * 0.0012))); redraw(); }, { passive: false });
     canvas.addEventListener('dblclick', () => { reset(); redraw(); });
+    // A still picture: draw once, keep the image, and free the GPU context at once.
+    if (still) {
+      draw();
+      const url = canvas.toDataURL('image/png');
+      gl.getExtension('WEBGL_lose_context')?.loseContext();
+      return url;
+    }
     const observer = new ResizeObserver(redraw);
     observer.observe(canvas);
     redraw();
@@ -453,5 +460,10 @@ float light=0.32+0.62*key+0.18*fill;gl_FragColor=vec4(mix(vColor*light,vColor,uU
     };
   }
 
-  window.BridgeViewer = { parseModel, mountModel, defaultUp: name => (['glb', 'gltf', 'obj'].includes(ext(name)) ? 'y' : 'z') };
+  /** A PNG data URL picture of a model, for thumbnails. */
+  function snapshot(model, { width = 296, height = 208, upAxis = 'z', dark = false } = {}) {
+    return mountModel(null, model, { upAxis, dark, still: { width, height } });
+  }
+
+  window.BridgeViewer = { parseModel, mountModel, snapshot, defaultUp: name => (['glb', 'gltf', 'obj'].includes(ext(name)) ? 'y' : 'z') };
 })();
