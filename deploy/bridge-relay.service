@@ -5,7 +5,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=/usr/bin/node /opt/cowork-agent/scripts/relay.mjs --name console.hirolab.space --listen 127.0.0.1 --port 8787
+ExecStart=/usr/bin/node /opt/cowork-agent/scripts/relay.mjs --name agents.hirolab.space --listen 127.0.0.1 --port 8787
 Restart=always
 RestartSec=5
 DynamicUser=yes

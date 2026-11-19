@@ -51,9 +51,9 @@ If the server already serves sites with nginx on its Tailscale address, put the 
 
 1. DNS: `console.example.com` → the server's Tailscale IP. Get a certificate for it the way you did for your other sites (the address is private, so it has to be a DNS challenge).
 2. `deploy/bridge-relay.service` → `/etc/systemd/system/` (the relay on `127.0.0.1:8787`), then `sudo systemctl daemon-reload && sudo systemctl enable --now bridge-relay`.
-3. `deploy/nginx-console.conf` → `/etc/nginx/sites-available/`, link it into `sites-enabled`, then `sudo nginx -t && sudo systemctl reload nginx`.
+3. `deploy/nginx-agents.hirolab.space.conf` → `/etc/nginx/sites-available/`, link it into `sites-enabled`, then `sudo nginx -t && sudo systemctl reload nginx`.
 
-nginx must pass `X-Real-IP $remote_addr`: the relay checks that this address is in the tailnet. Change `console.hirolab.space` in both files to your name.
+nginx must pass `X-Real-IP $remote_addr`: the relay checks that this address is in the tailnet. Change `agents.hirolab.space` in both files to your name.
 
 ## Laptop, once
 
