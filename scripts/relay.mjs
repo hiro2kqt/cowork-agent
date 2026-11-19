@@ -55,10 +55,38 @@ export function parseArgs(argv) {
   return options;
 }
 
-const OFFLINE_PAGE = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="refresh" content="10"><title>Bridge Console — offline</title>
-<style>:root{color-scheme:light dark;font:15px/1.6 system-ui,sans-serif}body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;background:Canvas}</style>
-</head><body><div><b>The laptop is offline.</b><br><span style="opacity:.7">Start the Bridge Console on it. This page retries every 10 seconds.</span></div></body></html>`;
+const esc = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const ago = ms => { const s = Math.round((Date.now() - ms) / 1000); return s < 60 ? 'just now' : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : `${Math.round(s / 86400)} d ago`; };
+
+/** The relay's own page: the machines that run a Bridge Console, to pick one. */
+function machinesPage(machines, { current, note = '' } = {}) {
+  // Two consoles with the same computer name (for example two state folders): tell them apart by ID.
+  const twice = new Set(machines.map(m => m.name).filter((name, i, all) => all.indexOf(name) !== i));
+  const rows = machines.map(m => `<a class="m${m.online ? '' : ' off'}" href="/relay/use?m=${encodeURIComponent(m.id)}">
+  <span class="dot${m.online ? ' on' : ''}"></span>
+  <span class="grow"><b>${esc(m.name)}</b>${twice.has(m.name) ? ` <span class="sub">#${esc(m.id.slice(0, 6))}</span>` : ''}${m.id === current ? ' <span class="tag">current</span>' : ''}<br>
+  <span class="sub">${esc(m.platform || '')}${m.version ? ` · ${esc(m.version)}` : ''} · ${m.online ? 'online' : `offline · seen ${ago(m.lastPoll)}`}</span></span>
+  <span class="go">${m.online ? 'Open ›' : ''}</span></a>`).join('');
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#141413" media="(prefers-color-scheme: dark)"><meta name="theme-color" content="#f7f7f5" media="(prefers-color-scheme: light)">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta http-equiv="refresh" content="5"><title>Bridge Console</title><style>
+:root{--bg:#f7f7f5;--panel:#fff;--line:#e6e5e1;--text:#1d1d1b;--muted:#8a8984;--ok:#1f8a4c;--soft:#f0efec;font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+@media (prefers-color-scheme:dark){:root{--bg:#141413;--panel:#1c1c1b;--line:#2e2e2c;--text:#ecebe8;--muted:#8f8d87;--ok:#62cc8f;--soft:#252523}}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;min-height:100dvh;background:var(--bg);color:var(--text);display:flex;justify-content:center;
+padding:max(28px,env(safe-area-inset-top)) 14px max(28px,env(safe-area-inset-bottom))}
+main{width:min(520px,100%)}h1{font-size:18px;margin:0 0 4px}.lead{color:var(--muted);font-size:13.5px;margin:0 0 18px}
+.m{display:flex;align-items:center;gap:12px;padding:13px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:inherit;text-decoration:none;margin-bottom:10px}
+.m:hover{border-color:var(--muted)}.m.off{opacity:.6;pointer-events:none}.grow{flex:1;min-width:0}.sub{color:var(--muted);font-size:12.5px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none}.dot.on{background:var(--ok)}
+.go{color:var(--muted);font-size:13px}.tag{font-size:11px;padding:1px 7px;border-radius:999px;background:var(--soft);color:var(--muted);font-weight:400}
+.empty{border:1px dashed var(--line);border-radius:12px;padding:22px 16px;color:var(--muted);font-size:14px;line-height:1.7}
+.note{background:var(--soft);border-radius:10px;padding:10px 12px;font-size:13.5px;margin-bottom:14px}code{font-size:12.5px}
+</style></head><body><main><h1>Bridge Console</h1><p class="lead">Machines running the console and connected to this relay. Updates every 5 seconds.</p>
+${note ? `<div class="note">${esc(note)}</div>` : ''}
+${rows || `<div class="empty">No machine is connected yet.<br>On the computer that runs Codex and Claude Code, start the Bridge Console and connect it to this address (sidebar → <b>Cloud</b>, or <code>node scripts/console.mjs --connect https://${'${host}'}</code>).</div>`}
+</main></body></html>`;
+}
 
 export async function startRelay({ listen, port = 80, names = [], log = message => console.error(message), allowAddress = isTailnet } = {}) {
   listen ||= tailscaleAddress();
@@ -72,11 +100,35 @@ export async function startRelay({ listen, port = 80, names = [], log = message 
     return behindProxy && loopback ? String(req.headers['x-real-ip'] || '') : peer;
   };
 
-  const queue = [];            // browser requests waiting for a laptop poll
-  const polls = [];            // laptop polls waiting for a browser request
-  const waiting = new Map();   // id -> browser request handed to the laptop, awaiting its answer
-  let lastPoll = 0, laptopVersion = '', server;
-  const online = () => polls.length > 0 || Date.now() - lastPoll < OFFLINE_MS;
+  // Every computer whose console connects here: its own queue of browser requests and parked polls.
+  const machines = new Map();  // id -> { id, name, platform, version, lastPoll, queue, polls }
+  const waiting = new Map();   // job id -> browser request handed to a machine, awaiting its answer
+  let server;
+  const isOnline = m => m.polls.length > 0 || Date.now() - m.lastPoll < OFFLINE_MS;
+  const listing = () => [...machines.values()].map(m => ({ id: m.id, name: m.name, platform: m.platform, version: m.version, lastPoll: m.lastPoll, online: isOnline(m) }))
+    .sort((a, b) => (b.online - a.online) || b.lastPoll - a.lastPoll);
+
+  function machineFor(req) {
+    const id = String(req.headers['x-console-machine-id'] || 'default').slice(0, 64);
+    let m = machines.get(id);
+    if (!m) { m = { id, queue: [], polls: [], lastPoll: 0 }; machines.set(id, m); log(`Machine connected: ${id}`); }
+    let name = String(req.headers['x-console-machine'] || '');
+    try { name = decodeURIComponent(name); } catch {}
+    m.name = (name || m.name || id).slice(0, 80);
+    m.platform = String(req.headers['x-console-platform'] || m.platform || '').slice(0, 20);
+    m.version = String(req.headers['x-console-version'] || m.version || '').slice(0, 40);
+    m.lastPoll = Date.now();
+    return m;
+  }
+
+  /** The machine this browser uses: its cookie choice, or the only one online. */
+  function chosen(req) {
+    const id = /(?:^|;\s*)bridge_machine=([^;]+)/.exec(req.headers.cookie || '')?.[1];
+    const picked = id && machines.get(decodeURIComponent(id));
+    if (picked) return picked;
+    const online = [...machines.values()].filter(isOnline);
+    return online.length === 1 ? online[0] : null;
+  }
 
   // Names this relay answers to: the --name values and its own address. Anything else is DNS rebinding.
   function hostAllowed(host) {
@@ -96,6 +148,12 @@ export async function startRelay({ listen, port = 80, names = [], log = message 
     res.end(JSON.stringify(value));
   }
 
+  function page(res, status, html) {
+    res.writeHead(status, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff',
+      'referrer-policy': 'no-referrer', 'x-frame-options': 'DENY', 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'" });
+    res.end(html.replace('${host}', esc(names[0] || listen)));
+  }
+
   function hand(poll, job) {
     clearTimeout(poll.timer);
     waiting.set(job.id, job);
@@ -106,56 +164,58 @@ export async function startRelay({ listen, port = 80, names = [], log = message 
   }
 
   async function forward(req, res, url) {
-    if (!online()) {
-      if (url.pathname.startsWith('/api/')) return json(res, 503, { error: 'The laptop is offline. Start the Bridge Console on it.' });
-      res.writeHead(503, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
-      return res.end(OFFLINE_PAGE);
+    const m = chosen(req);
+    if (!m || !isOnline(m)) {
+      if (url.pathname.startsWith('/api/')) {
+        return json(res, 503, { error: m ? `${m.name} is offline.` : 'No machine is chosen.', relay: true, machines: '/machines' });
+      }
+      return page(res, 200, machinesPage(listing(), { current: m?.id, note: m ? `${m.name} is offline. Choose another machine, or start the console on it.` : '' }));
     }
     const body = ['GET', 'HEAD'].includes(req.method) ? Buffer.alloc(0) : await readBody(req, MAX_BODY);
     const job = { id: crypto.randomUUID(), method: req.method, path: url.pathname + url.search, body,
       contentType: String(req.headers['content-type'] || ''), fileName: String(req.headers['x-file-name'] || ''), res };
     job.timer = setTimeout(() => {
-      const i = queue.indexOf(job);
-      if (i >= 0) queue.splice(i, 1);
+      const i = m.queue.indexOf(job);
+      if (i >= 0) m.queue.splice(i, 1);
       waiting.delete(job.id);
-      json(res, 504, { error: 'The laptop did not answer in time.' });
+      json(res, 504, { error: `${m.name} did not answer in time.`, relay: true });
     }, ANSWER_MS);
     res.on('close', () => {
       if (res.writableEnded) return;
       clearTimeout(job.timer); waiting.delete(job.id);
-      const i = queue.indexOf(job); if (i >= 0) queue.splice(i, 1);
+      const i = m.queue.indexOf(job); if (i >= 0) m.queue.splice(i, 1);
     });
-    const poll = polls.shift();
-    if (poll) hand(poll, job); else queue.push(job);
+    const poll = m.polls.shift();
+    if (poll) hand(poll, job); else m.queue.push(job);
   }
 
   server = http.createServer(async (req, res) => {
     try {
       if (!allowAddress(clientAddress(req))) { res.writeHead(403); return res.end(); }
       const url = new URL(req.url, 'http://relay');
-      // Only by a name of this relay, and never sent by another web page (that would also let a page take the laptop's polls).
-      if (!hostAllowed(req.headers.host)) return json(res, 421, { error: `Open the console by its address${names[0] ? ` (http://${names[0]})` : ''}.` });
+      // Only by a name of this relay, and never sent by another web page (that would also let a page take a machine's polls).
+      if (!hostAllowed(req.headers.host)) return json(res, 421, { error: `Open the console by its address${names[0] ? ` (https://${names[0]})` : ''}.` });
       const origin = req.headers.origin;
       if (origin && origin !== 'null' && !hostAllowed(new URL(origin).host)) return json(res, 403, { error: 'Cross-site request refused.' });
       if (req.headers['sec-fetch-site'] === 'cross-site') return json(res, 403, { error: 'Cross-site request refused.' });
 
-      // The laptop side.
+      // The machines' side.
       if (url.pathname.startsWith('/connector/')) {
-        lastPoll = Date.now();
-        laptopVersion = String(req.headers['x-console-version'] || '').slice(0, 40);
         if (req.method === 'GET' && url.pathname === '/connector/poll') {
-          const job = queue.shift();
+          const m = machineFor(req);
+          const job = m.queue.shift();
           const poll = { res };
           if (job) return hand(poll, job);
           poll.timer = setTimeout(() => {
-            const i = polls.indexOf(poll); if (i >= 0) polls.splice(i, 1);
-            lastPoll = Date.now(); res.writeHead(204); res.end();
+            const i = m.polls.indexOf(poll); if (i >= 0) m.polls.splice(i, 1);
+            m.lastPoll = Date.now(); res.writeHead(204); res.end();
           }, POLL_MS);
-          res.on('close', () => { clearTimeout(poll.timer); const i = polls.indexOf(poll); if (i >= 0) polls.splice(i, 1); });
-          polls.push(poll);
+          res.on('close', () => { clearTimeout(poll.timer); const i = m.polls.indexOf(poll); if (i >= 0) m.polls.splice(i, 1); });
+          m.polls.push(poll);
           return;
         }
         if (req.method === 'POST' && url.pathname === '/connector/answer') {
+          machineFor(req);
           const job = waiting.get(String(req.headers['x-relay-id'] || ''));
           const body = await readBody(req, MAX_BODY);
           if (!job) return json(res, 410, { error: 'That request is gone.' });
@@ -170,7 +230,18 @@ export async function startRelay({ listen, port = 80, names = [], log = message 
         return json(res, 404, { error: 'Not found.' });
       }
 
-      if (url.pathname === '/relay/status') return json(res, 200, { online: online(), laptopVersion });
+      // The relay's own pages.
+      if (url.pathname === '/machines') return page(res, 200, machinesPage(listing(), { current: chosen(req)?.id }));
+      if (url.pathname === '/relay/use') {
+        const id = url.searchParams.get('m') || '';
+        if (!machines.has(id)) { res.writeHead(303, { location: '/machines' }); return res.end(); }
+        res.writeHead(303, { location: '/', 'set-cookie': `bridge_machine=${encodeURIComponent(id)}; Path=/; Max-Age=31536000; SameSite=Lax${req.headers['x-forwarded-proto'] === 'https' ? '; Secure' : ''}` });
+        return res.end();
+      }
+      if (url.pathname === '/relay/status') {
+        const m = chosen(req);
+        return json(res, 200, { online: Boolean(m && isOnline(m)), machine: m ? m.name : null, laptopVersion: m?.version || '', machines: listing() });
+      }
       await forward(req, res, url);
     } catch (error) {
       json(res, error.status || 400, { error: String(error.message || error) });
@@ -179,7 +250,7 @@ export async function startRelay({ listen, port = 80, names = [], log = message 
   server.requestTimeout = 0; // long polls and large uploads
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, listen, resolve); });
   return { listen, port: server.address().port,
-    close: () => new Promise(resolve => { for (const p of polls) p.res.destroy(); server.close(resolve); server.closeAllConnections?.(); }) };
+    close: () => new Promise(resolve => { for (const m of machines.values()) for (const p of m.polls) p.res.destroy(); server.close(resolve); server.closeAllConnections?.(); }) };
 }
 
 if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {

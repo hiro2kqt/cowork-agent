@@ -82,8 +82,8 @@ export async function startConsole({ port = 4317, demo = false, stateDir, token 
   }
 
   const routes = {
-    'GET /api/state': (body, req) => ({ ...engine.snapshot(), availability, demo, version, platform: transport.platform ?? process.platform,
-      cloud: cloudLink?.status() ?? null, viaRelay: req.headers['x-console-via-relay'] === '1',
+    'GET /api/state': (body, req) => ({ ...engine.snapshot(), availability, demo, appVersion: version, platform: transport.platform ?? process.platform,
+      cloud: cloudLink?.status() ?? null, viaRelay: req.headers['x-console-via-relay'] === '1', machine: os.hostname(),
       stateDir: demo ? stateDir : undefined, now: Date.now() }),
     'GET /api/sessions': async () => refreshCatalog(),
     'POST /api/select': async body => { const r = engine.select(body.agent, body.participant ?? null); await refreshCatalog().catch(() => {}); return r; },
@@ -159,13 +159,16 @@ export async function startConsole({ port = 4317, demo = false, stateDir, token 
   });
   const actualPort = server.address().port;
   // Reachable from anywhere through the Bridge Relay, if this state directory was connected to one.
+  // This computer, as the relay lists it. The ID stays the same for this computer and state folder.
+  const machine = { name: os.hostname(), platform: process.platform,
+    id: crypto.createHash('sha256').update(`${os.hostname()}\0${stateDir}`).digest('hex').slice(0, 16) };
   let cloud = demo ? null : readCloud(stateDir);
-  let cloudLink = cloud ? connectCloud({ relay: cloud.url, localPort: server.address().port, token, version, log }) : null;
+  let cloudLink = cloud ? connectCloud({ relay: cloud.url, localPort: server.address().port, token, version, machine, log }) : null;
   /** Connect to a relay (saved for later starts), or disconnect with url null. */
   function setCloud(url) {
     if (demo) throw new Error('Not in demo mode.');
     cloudLink?.stop(); cloudLink = null;
-    if (url) { cloud = saveCloud(stateDir, url); cloudLink = connectCloud({ relay: cloud.url, localPort: server.address().port, token, version, log }); log(`Cloud relay saved: ${cloud.url}`); }
+    if (url) { cloud = saveCloud(stateDir, url); cloudLink = connectCloud({ relay: cloud.url, localPort: server.address().port, token, version, machine, log }); log(`Cloud relay saved: ${cloud.url}`); }
     else { forgetCloud(stateDir); cloud = null; log('Cloud relay disconnected.'); }
     return cloudLink?.status() ?? null;
   }

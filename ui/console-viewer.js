@@ -390,7 +390,11 @@ float light=0.32+0.62*key+0.18*fill;gl_FragColor=vec4(mix(vColor*light,vColor,uU
     buildGrid();
 
     let yaw, pitch, dist, target;
-    function reset() { yaw = -0.7; pitch = 0.45; dist = radius * 2.6; target = center.slice(); }
+    function reset() {
+      // Fit the whole model: on a tall (phone) screen the width is the tighter side.
+      const aspect = (canvas.clientWidth / canvas.clientHeight) || 1;
+      yaw = -0.7; pitch = 0.45; dist = radius * 2.6 / Math.min(1, Math.max(aspect, 0.35)); target = center.slice();
+    }
     reset();
     function eye() {
       const cp = Math.cos(pitch), sp = Math.sin(pitch);
@@ -426,31 +430,51 @@ float light=0.32+0.62*key+0.18*fill;gl_FragColor=vec4(mix(vColor*light,vColor,uU
     // double-click (double-tap) resets.
     let drag = null;
     const touches = new Map();
-    let pinch = 0;
+    let pinch = 0, mid = null, lastTap = 0, tapStart = null;
+    const midpoint = () => { const [a, b] = [...touches.values()]; return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
+    const pan = (dx, dy) => {
+      const v = lookAt(eye(), target, upVector());
+      const scale = dist / canvas.clientHeight;
+      for (let k = 0; k < 3; k++) target[k] += (-dx * v[k * 4] + dy * v[k * 4 + 1]) * scale;
+    };
     const zoom = factor => { dist = Math.max(radius * 0.05, Math.min(radius * 40, dist * factor)); redraw(); };
     const spread = () => { const [a, b] = [...touches.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
     canvas.addEventListener('contextmenu', e => e.preventDefault());
     canvas.addEventListener('pointerdown', e => {
       canvas.setPointerCapture(e.pointerId);
       touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (touches.size === 2) { drag = null; pinch = spread(); return; }
+      if (touches.size === 2) { drag = null; pinch = spread(); mid = midpoint(); tapStart = null; return; }
+      tapStart = touches.size === 1 ? { x: e.clientX, y: e.clientY, at: Date.now() } : null;
       drag = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey };
       canvas.style.cursor = 'grabbing';
     });
-    const release = e => { touches.delete(e.pointerId); if (touches.size < 2) pinch = 0; if (!touches.size) { drag = null; canvas.style.cursor = 'grab'; } };
+    const release = e => {
+      touches.delete(e.pointerId);
+      if (touches.size < 2) { pinch = 0; mid = null; }
+      if (!touches.size) { drag = null; canvas.style.cursor = 'grab'; }
+      // Double-tap resets (touch screens do not always send dblclick).
+      if (e.type === 'pointerup' && e.pointerType === 'touch' && tapStart && Date.now() - tapStart.at < 250
+        && Math.hypot(e.clientX - tapStart.x, e.clientY - tapStart.y) < 10) {
+        if (Date.now() - lastTap < 350) { lastTap = 0; reset(); redraw(); } else lastTap = Date.now();
+      }
+      tapStart = null;
+    };
     canvas.addEventListener('pointerup', release);
     canvas.addEventListener('pointercancel', release);
     canvas.addEventListener('pointermove', e => {
       if (touches.has(e.pointerId)) touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (touches.size === 2 && pinch) { const now = spread(); if (now > 0) zoom(pinch / now); pinch = now; return; }
+      if (touches.size === 2 && pinch) {
+        const now = spread(), m = midpoint();
+        if (now > 0) zoom(pinch / now);
+        if (mid) pan(m.x - mid.x, m.y - mid.y);
+        pinch = now; mid = m; redraw();
+        return;
+      }
       if (!drag) return;
       const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
       drag.x = e.clientX; drag.y = e.clientY;
-      if (drag.pan) {
-        const v = lookAt(eye(), target, upVector());
-        const scale = dist / canvas.clientHeight;
-        for (let k = 0; k < 3; k++) target[k] += (-dx * v[k * 4] + dy * v[k * 4 + 1]) * scale;
-      } else {
+      if (drag.pan) pan(dx, dy);
+      else {
         yaw -= dx * 0.008;
         pitch = Math.max(-1.55, Math.min(1.55, pitch + dy * 0.008));
       }
@@ -465,7 +489,8 @@ float light=0.32+0.62*key+0.18*fill;gl_FragColor=vec4(mix(vColor*light,vColor,uU
       gl.getExtension('WEBGL_lose_context')?.loseContext();
       return url;
     }
-    const observer = new ResizeObserver(redraw);
+    let fitted = false;
+    const observer = new ResizeObserver(() => { if (!fitted && canvas.clientWidth) { fitted = true; reset(); } redraw(); });
     observer.observe(canvas);
     redraw();
     return {

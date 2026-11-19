@@ -63,9 +63,18 @@ node scripts/console.mjs --connect http://console.example.com
 
 Or, without a command: open the console on the laptop, enter the address under **Cloud** in the sidebar, and click *Connect*. The address is saved in `<state dir>/console/cloud.json`. From then on, the console connects every time it starts, from the shortcut as well, and reconnects by itself after sleep or a network change. `node scripts/console.mjs --disconnect` forgets it.
 
+## Several machines
+
+One relay serves every computer whose console connects to it: the laptop on one day, a server on another, or both. Each console reports its computer name. Opening the relay address:
+
+- with exactly one machine online, opens its console;
+- otherwise shows the **machine list** (online or offline, last seen), which refreshes by itself. Tap one to open it. The choice is remembered on that phone.
+
+In the console, the sidebar shows the machine, with **Switch** to go back to the list. When the chosen machine goes offline, the page says so and links to the list.
+
 ## Phone
 
-Open `http://console.example.com` with the Tailscale app connected. Bookmark it or add it to the home screen. If the laptop's console is not running, the page says the laptop is offline and retries.
+Open `http://console.example.com` with the Tailscale app connected. Bookmark it or add it to the home screen. If no machine is online, the page lists the machines and refreshes until one connects.
 
 For the console to work while you are away, the laptop must stay awake on power (Windows: Settings → System → Power → Sleep: Never when plugged in; closing the lid: Do nothing), with the console, Codex Desktop, and the selected Claude Code session open.
 
