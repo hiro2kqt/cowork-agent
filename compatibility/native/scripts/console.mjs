@@ -132,8 +132,30 @@ export async function startConsole({ port = 4317, demo = false, stateDir, token 
   refreshCatalog().catch(error => log(`discovery: ${error.message}`));
   engine.tick().catch(error => log(`tick: ${error.message}`));
   const url = `http://127.0.0.1:${actualPort}/#t=${token}`;
+  // Lets a second launch (a double-clicked shortcut) reopen this running console instead of failing.
+  const serverFile = path.join(stateDir, 'console', 'server.json');
+  if (!demo) {
+    try { fs.mkdirSync(path.dirname(serverFile), { recursive: true }); fs.writeFileSync(serverFile, JSON.stringify({ port: actualPort, token, pid: process.pid }), { mode: 0o600 }); }
+    catch (error) { log(`Could not record the running console: ${error.message}`); }
+  }
   return { url, port: actualPort, token, stateDir, engine, refreshCatalog,
-    async close() { timers.forEach(clearInterval); await new Promise(resolve => server.close(resolve)); server.closeAllConnections?.(); } };
+    async close() {
+      timers.forEach(clearInterval);
+      if (!demo) try { if (JSON.parse(fs.readFileSync(serverFile, 'utf8')).pid === process.pid) fs.unlinkSync(serverFile); } catch {}
+      await new Promise(resolve => server.close(resolve)); server.closeAllConnections?.();
+    } };
+}
+
+/** URL of a console already running for this state directory, if it answers with its recorded token. */
+export async function runningConsole({ stateDir, env = process.env } = {}) {
+  stateDir = path.resolve(stateDir || defaultStateDir({ env }));
+  let info;
+  try { info = JSON.parse(fs.readFileSync(path.join(stateDir, 'console', 'server.json'), 'utf8')); } catch { return null; }
+  if (!Number.isInteger(info?.port) || typeof info.token !== 'string') return null;
+  try {
+    const response = await fetch(`http://127.0.0.1:${info.port}/api/state`, { headers: { 'x-console-token': info.token }, signal: AbortSignal.timeout(2000) });
+    return response.ok ? `http://127.0.0.1:${info.port}/#t=${info.token}` : null;
+  } catch { return null; }
 }
 
 function openBrowser(url) {
@@ -148,6 +170,14 @@ if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import
   if (options.help) {
     console.log('Usage: node scripts/console.mjs [--port 4317] [--no-open] [--demo] [--state-dir <dir>]\nSee docs/CONSOLE.md.');
     process.exit(0);
+  }
+  if (!options.demo) {
+    const existing = await runningConsole({ stateDir: options.stateDir });
+    if (existing) {
+      console.log(`Bridge Console is already running: ${existing}`);
+      if (options.open) openBrowser(existing);
+      process.exit(0);
+    }
   }
   try {
     const app = await startConsole(options);

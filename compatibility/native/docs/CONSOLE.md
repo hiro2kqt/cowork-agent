@@ -45,6 +45,8 @@ The command prints a URL such as `http://127.0.0.1:4317/#t=…` and opens it in 
 | `--demo` | Use two **simulated** sessions and a temporary state folder, to try the interface without touching Claude or Codex. Add `#fail-claude` or `#fail-codex` to a message to make that recipient fail once and try resending. |
 | `--state-dir <dir>` | Use another shared state folder. Both apps must use the same one, which is the bridge default `~/.local/share/claude-codex-bridge`. |
 
+**Windows without typing a command:** double-click `Bridge Console.cmd` in the repository folder, or run `node scripts\shortcut.mjs` once to add a **Bridge Console** shortcut to the Desktop and Start Menu (`--remove` deletes them). The shortcut runs minimized; close its window to stop the console. Clicking it again while the console runs just reopens the page.
+
 Stop it with Ctrl+C. Your selection, router, roles, and history are saved and shown again next time.
 
 ## Use it
