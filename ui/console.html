@@ -91,7 +91,20 @@ footer{border-top:1px solid var(--line);padding:12px 20px;display:flex;flex-dire
 .viewer .hint{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);font-size:12px;color:#bbb;pointer-events:none}
 .dropping footer{outline:2px dashed var(--codex);outline-offset:-6px}
 .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--bad);color:#fff;padding:8px 14px;border-radius:8px;z-index:9;max-width:80vw}
-@media (max-width:820px){body{flex-direction:column}aside{width:auto;max-height:40vh;border-right:0;border-bottom:1px solid var(--line)}}
+@media (min-width:821px){.menu{display:none}}
+@media (max-width:820px){
+  aside{position:fixed;top:0;bottom:0;left:0;width:min(300px,86vw);z-index:6;transform:translateX(-102%);transition:transform .18s;box-shadow:0 0 24px rgba(0,0,0,.3)}
+  body.side-open aside{transform:none}
+  .top{padding:8px 10px;overflow-x:auto;white-space:nowrap}
+  #timeline{padding:12px 10px}
+  footer{padding:8px 10px}
+  footer .row{flex-wrap:wrap}
+  #composer{font-size:16px}
+  .card{padding:10px}
+  .ev{flex-wrap:wrap}
+  .viewer .bar{flex-wrap:wrap;padding:8px}
+  .viewer .model{width:100vw;border-radius:0}
+}
 </style>
 </head>
 <body>
@@ -117,8 +130,9 @@ footer{border-top:1px solid var(--line);padding:12px 20px;display:flex;flex-dire
 <script src="/console-viewer.js"></script>
 <script>
 'use strict';
-const token = new URLSearchParams(location.hash.slice(1)).get('t') || sessionStorage.getItem('bridgeConsoleToken') || '';
-if (token) { sessionStorage.setItem('bridgeConsoleToken', token); history.replaceState(null, '', location.pathname); }
+const token = new URLSearchParams(location.hash.slice(1)).get('t') || localStorage.getItem('bridgeConsoleToken') || '';
+// Through the cloud relay there is no token: the relay checks your login and the laptop adds the token itself.
+if (token) { localStorage.setItem('bridgeConsoleToken', token); history.replaceState(null, '', location.pathname); }
 const AGENTS = ['codex', 'claude'];
 const NAME = { codex: 'Codex', claude: 'Claude', user: 'You', system: '' };
 const PHASE = { routing: ['Triaging', ''], awaiting_user: ['Choose who', 'warn'], dispatching: ['Sending', ''], delivered: ['Sent', ''],
@@ -129,6 +143,7 @@ let attached = JSON.parse(sessionStorage.getItem('bridgeConsoleFiles') || '[]');
 // One mode: @mentions assign directly; otherwise the router decides whether it is a question or work, and who does it.
 const kind = 'task';
 const $ = id => document.getElementById(id);
+const uuid = () => crypto.randomUUID?.() ?? [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
 function el(tag, attrs = {}, ...kids) {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
@@ -314,7 +329,7 @@ const openQuestions = () => S.events.filter(e => e.kind === 'question' && AGENTS
 function renderTabs() {
   const needs = S.requests.filter(r => r.phase === 'awaiting_user').length + openQuestions().length;
   const problems = S.requests.filter(r => r.phase === 'delivery_problem').length;
-  $('tabs').replaceChildren(...[['all', 'All'], ['attn', 'Needs you', needs, 'warn'], ['problems', 'Problems', problems, 'bad'], ['peer', 'AI ↔ AI'], ['files', 'Files', Object.keys(S.files || {}).length, '']].map(([key, label, n, tone]) =>
+  $('tabs').replaceChildren(el('button', { class: 'ghost menu', title: 'Sessions and roles', onclick: e => { e.stopPropagation(); document.body.classList.toggle('side-open'); } }, '☰'),...[['all', 'All'], ['attn', 'Needs you', needs, 'warn'], ['problems', 'Problems', problems, 'bad'], ['peer', 'AI ↔ AI'], ['files', 'Files', Object.keys(S.files || {}).length, '']].map(([key, label, n, tone]) =>
     el('button', { class: `tab ${tab === key ? 'on' : ''}`, onclick: () => { tab = key; renderTabs(); renderTimeline(); } }, label, n ? el('span', { class: `badge ${tone}`, style: 'margin-left:6px' }, n) : null)),
     el('span', { class: 'grow' }),
     el('button', { class: 'ghost small', title: 'Clear this console history (Codex and Claude keep their own chats)', disabled: !S.requests.length && !S.events.length,
@@ -504,7 +519,7 @@ async function send() {
   const message = $('composer').value;
   if ((!message.trim() && !attached.length) || pending || $('sendBtn').disabled) return;
   pending = true; renderComposer();
-  const clientId = sessionStorage.getItem('bridgeConsoleDraftId') || crypto.randomUUID();
+  const clientId = sessionStorage.getItem('bridgeConsoleDraftId') || uuid();
   sessionStorage.setItem('bridgeConsoleDraftId', clientId);
   try {
     await act('/api/submit', { clientId, message, replyTo: replyTo?.id, notifyOther: $('notifyOther').checked, kind, attachments: attached.map(f => f.id) });
@@ -592,6 +607,8 @@ document.addEventListener('dragenter', e => { if (e.dataTransfer?.types.includes
 document.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('dropping'); } });
 document.addEventListener('dragover', e => { if (e.dataTransfer?.types.includes('Files')) e.preventDefault(); });
 document.addEventListener('drop', e => { if (!e.dataTransfer?.files.length) return; e.preventDefault(); dragDepth = 0; document.body.classList.remove('dropping'); upload([...e.dataTransfer.files]); });
+// On a phone the sidebar slides in over the page; a tap outside closes it.
+document.querySelector('.feed').addEventListener('click', () => document.body.classList.remove('side-open'));
 poll(true);
 setInterval(() => { if (!document.hidden) poll(false); }, 1500);
 </script>

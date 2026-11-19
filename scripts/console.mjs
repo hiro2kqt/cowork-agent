@@ -17,12 +17,13 @@ import { defaultStateDir } from '../lib/state-directory.mjs';
 import { createEngine } from '../lib/console-engine.mjs';
 import { readState } from '../lib/console-state.mjs';
 import { MAX_FILE_BYTES, storeBuffer, fileMeta, publicMeta } from '../lib/console-files.mjs';
+import { readCloud, saveCloud, forgetCloud, connectCloud } from '../lib/console-cloud.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const version = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
 
 export function parseArgs(argv) {
-  const options = { port: 4317, open: true, demo: false, stateDir: null, host: '127.0.0.1' };
+  const options = { port: 4317, open: true, demo: false, stateDir: null, host: '127.0.0.1', connect: null, disconnect: false };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--no-open') options.open = false;
@@ -31,6 +32,8 @@ export function parseArgs(argv) {
     else if (arg.startsWith('--port=')) options.port = Number(arg.slice(7));
     else if (arg === '--state-dir') options.stateDir = argv[++i];
     else if (arg.startsWith('--state-dir=')) options.stateDir = arg.slice(12);
+    else if (arg === '--connect') options.connect = argv[++i];
+    else if (arg === '--disconnect') options.disconnect = true;
     else if (arg === '--help' || arg === '-h') options.help = true;
     else throw new Error(`Unknown argument: ${arg}`);
   }
@@ -148,6 +151,9 @@ export async function startConsole({ port = 4317, demo = false, stateDir, token 
     server.listen(port, '127.0.0.1', resolve);
   });
   const actualPort = server.address().port;
+  // Reachable from anywhere through the Bridge Relay, if this state directory was connected to one.
+  const cloud = demo ? null : readCloud(stateDir);
+  const cloudLink = cloud ? connectCloud({ relay: cloud.url, localPort: server.address().port, token, version, log }) : null;
   const timers = [setInterval(() => engine.tick().catch(error => log(`tick: ${error.message}`)), tickMs),
     setInterval(() => refreshCatalog().catch(error => log(`discovery: ${error.message}`)), availabilityMs)];
   refreshCatalog().catch(error => log(`discovery: ${error.message}`));
@@ -159,9 +165,10 @@ export async function startConsole({ port = 4317, demo = false, stateDir, token 
     try { fs.mkdirSync(path.dirname(serverFile), { recursive: true }); fs.writeFileSync(serverFile, JSON.stringify({ port: actualPort, token, pid: process.pid }), { mode: 0o600 }); }
     catch (error) { log(`Could not record the running console: ${error.message}`); }
   }
-  return { url, port: actualPort, token, stateDir, engine, refreshCatalog,
+  return { url, port: actualPort, token, stateDir, engine, refreshCatalog, cloud: cloud?.url ?? null,
     async close() {
       timers.forEach(clearInterval);
+      cloudLink?.stop();
       if (!demo) try { if (JSON.parse(fs.readFileSync(serverFile, 'utf8')).pid === process.pid) fs.unlinkSync(serverFile); } catch {}
       await new Promise(resolve => server.close(resolve)); server.closeAllConnections?.();
     } };
@@ -189,8 +196,21 @@ if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import
   let options;
   try { options = parseArgs(process.argv.slice(2)); } catch (error) { console.error(error.message); process.exit(2); }
   if (options.help) {
-    console.log('Usage: node scripts/console.mjs [--port 4317] [--no-open] [--demo] [--state-dir <dir>]\nSee docs/CONSOLE.md.');
+    console.log('Usage: node scripts/console.mjs [--port 4317] [--no-open] [--demo] [--state-dir <dir>]\n'
+      + '       node scripts/console.mjs --connect <relay address>   (remember a Bridge Relay; see docs/RELAY.md)\n'
+      + '       node scripts/console.mjs --disconnect                                  (forget it)\nSee docs/CONSOLE.md.');
     process.exit(0);
+  }
+  if (options.connect || options.disconnect) {
+    const stateDir = path.resolve(options.stateDir || defaultStateDir({ env: process.env }));
+    try {
+      if (options.disconnect) { forgetCloud(stateDir); console.log('Cloud relay forgotten.'); }
+      else { const saved = saveCloud(stateDir, options.connect); console.log(`Cloud relay saved: ${saved.url}. The console connects to it every time it starts.`); }
+    } catch (error) { console.error(error.message); process.exit(2); }
+    if (await runningConsole({ stateDir: options.stateDir })) {
+      console.log('The console is already running with the old setting: close its window and start it again.');
+      process.exit(0);
+    }
   }
   if (!options.demo) {
     const existing = await runningConsole({ stateDir: options.stateDir });
@@ -204,6 +224,7 @@ if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import
     const app = await startConsole(options);
     console.log(`Bridge Console ${version}${options.demo ? ' (DEMO — simulated sessions)' : ''}`);
     console.log(`Open: ${app.url}`);
+    if (app.cloud) console.log(`Cloud: ${app.cloud} (open it on your phone)`);
     console.log(`State: ${app.stateDir}`);
     console.log('Press Ctrl+C to stop. Requests and history are kept and shown again next time.');
     if (options.open) openBrowser(app.url);

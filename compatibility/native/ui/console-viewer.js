@@ -422,12 +422,27 @@ float light=0.32+0.62*key+0.18*fill;gl_FragColor=vec4(mix(vColor*light,vColor,uU
     }
     const redraw = () => { if (!frame) frame = requestAnimationFrame(draw); };
 
-    // Left drag orbits; right drag or Shift+drag pans; the wheel zooms; double-click resets.
+    // Left drag (one finger) orbits; right drag or Shift+drag pans; the wheel or a two-finger pinch zooms;
+    // double-click (double-tap) resets.
     let drag = null;
+    const touches = new Map();
+    let pinch = 0;
+    const zoom = factor => { dist = Math.max(radius * 0.05, Math.min(radius * 40, dist * factor)); redraw(); };
+    const spread = () => { const [a, b] = [...touches.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
     canvas.addEventListener('contextmenu', e => e.preventDefault());
-    canvas.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey }; canvas.setPointerCapture(e.pointerId); canvas.style.cursor = 'grabbing'; });
-    canvas.addEventListener('pointerup', () => { drag = null; canvas.style.cursor = 'grab'; });
+    canvas.addEventListener('pointerdown', e => {
+      canvas.setPointerCapture(e.pointerId);
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (touches.size === 2) { drag = null; pinch = spread(); return; }
+      drag = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey };
+      canvas.style.cursor = 'grabbing';
+    });
+    const release = e => { touches.delete(e.pointerId); if (touches.size < 2) pinch = 0; if (!touches.size) { drag = null; canvas.style.cursor = 'grab'; } };
+    canvas.addEventListener('pointerup', release);
+    canvas.addEventListener('pointercancel', release);
     canvas.addEventListener('pointermove', e => {
+      if (touches.has(e.pointerId)) touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (touches.size === 2 && pinch) { const now = spread(); if (now > 0) zoom(pinch / now); pinch = now; return; }
       if (!drag) return;
       const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
       drag.x = e.clientX; drag.y = e.clientY;
@@ -441,7 +456,7 @@ float light=0.32+0.62*key+0.18*fill;gl_FragColor=vec4(mix(vColor*light,vColor,uU
       }
       redraw();
     });
-    canvas.addEventListener('wheel', e => { e.preventDefault(); dist = Math.max(radius * 0.05, Math.min(radius * 40, dist * Math.exp(e.deltaY * 0.0012))); redraw(); }, { passive: false });
+    canvas.addEventListener('wheel', e => { e.preventDefault(); zoom(Math.exp(e.deltaY * 0.0012)); }, { passive: false });
     canvas.addEventListener('dblclick', () => { reset(); redraw(); });
     // A still picture: draw once, keep the image, and free the GPU context at once.
     if (still) {
