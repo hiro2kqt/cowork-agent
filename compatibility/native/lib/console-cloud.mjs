@@ -33,10 +33,10 @@ export function forgetCloud(stateDir) { fs.rmSync(cloudFile(stateDir), { force: 
 export function connectCloud({ relay, localPort, token, version, log = () => {} }) {
   let stopped = false, connected = null;
   const controllers = new Set();
-  const status = online => {
+  const status = (online, reason = '') => {
     if (connected === online) return;
     connected = online;
-    log(online ? `Cloud: connected to ${relay}` : `Cloud: cannot reach ${relay}; retrying.`);
+    log(online ? `Cloud: connected to ${relay}` : `Cloud: cannot reach ${relay} (${reason}); retrying.`);
   };
 
   async function handle(response) {
@@ -64,7 +64,8 @@ export function connectCloud({ relay, localPort, token, version, log = () => {} 
   }
 
   async function loop() {
-    let delay = 1000;
+    // A single failure is usually a kept-alive connection the proxy already closed: retry at once, quietly.
+    let delay = 1000, failures = 0;
     while (!stopped) {
       const controller = new AbortController();
       controllers.add(controller);
@@ -74,12 +75,13 @@ export function connectCloud({ relay, localPort, token, version, log = () => {} 
           headers: { 'x-console-version': version } });
         if (response.status >= 400) { await response.arrayBuffer().catch(() => {}); throw new Error(`relay answered ${response.status}`); }
         status(true);
-        delay = 1000;
+        delay = 1000; failures = 0;
         if (response.status === 200) handle(response).catch(error => log(`Cloud: ${error.message}`));
         else await response.arrayBuffer().catch(() => {});
       } catch (error) {
         if (stopped) break;
-        status(false);
+        if (++failures < 3) { await sleep(250); continue; }
+        status(false, error.cause?.code || error.cause?.message || error.message);
         await sleep(delay);
         delay = Math.min(delay * 2, 30_000);
       } finally { clearTimeout(timer); controllers.delete(controller); }

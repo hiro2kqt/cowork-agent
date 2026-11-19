@@ -191,10 +191,12 @@ if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import
   }
   try {
     const relay = await startRelay(options);
-    const where = `${options.names[0] || relay.listen}${relay.port === 80 ? '' : `:${relay.port}`}`;
+    // Behind nginx the public address is https://<name>; otherwise this server's own port.
+    const proxied = ['127.0.0.1', '::1', 'localhost'].includes(relay.listen);
+    const where = proxied ? `https://${options.names[0]}` : `http://${options.names[0] || relay.listen}${relay.port === 80 ? '' : `:${relay.port}`}`;
     console.log(`Bridge Relay on ${relay.listen}:${relay.port} (tailnet only).`);
-    console.log(`Phone: http://${where}`);
-    console.log(`Laptop, once: node scripts/console.mjs --connect http://${where}`);
+    console.log(`Phone: ${where}`);
+    console.log(`Laptop, once: node scripts/console.mjs --connect ${where}`);
     const stop = () => relay.close().finally(() => process.exit(0));
     process.on('SIGINT', stop); process.on('SIGTERM', stop);
   } catch (error) {
