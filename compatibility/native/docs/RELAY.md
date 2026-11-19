@@ -45,6 +45,16 @@ Anyone who can reach the relay can direct Codex and Claude on your laptop. Keep 
 
    Port 80 needs the capability line above. Without it, use `--port 8787` and add `:8787` to the addresses below.
 
+### Behind nginx (HTTPS)
+
+If the server already serves sites with nginx on its Tailscale address, put the relay behind it instead of on port 80. Ready-made files are in `deploy/`:
+
+1. DNS: `console.example.com` → the server's Tailscale IP. Get a certificate for it the way you did for your other sites (the address is private, so it has to be a DNS challenge).
+2. `deploy/bridge-relay.service` → `/etc/systemd/system/` (the relay on `127.0.0.1:8787`), then `sudo systemctl daemon-reload && sudo systemctl enable --now bridge-relay`.
+3. `deploy/nginx-console.conf` → `/etc/nginx/sites-available/`, link it into `sites-enabled`, then `sudo nginx -t && sudo systemctl reload nginx`.
+
+nginx must pass `X-Real-IP $remote_addr`: the relay checks that this address is in the tailnet. Change `console.hirolab.space` in both files to your name.
+
 ## Laptop, once
 
 ```sh

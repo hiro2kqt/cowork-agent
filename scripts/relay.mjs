@@ -6,6 +6,7 @@
 // on the laptop listens to the network. Node.js standard library only.
 //
 //   node scripts/relay.mjs --name console.example.com [--port 80] [--listen <tailscale IP>]
+//   node scripts/relay.mjs --name console.example.com --listen 127.0.0.1 --port 8787   (behind nginx, which sets X-Real-IP)
 //
 // There is no login: access is your Tailscale network. The relay therefore listens on the server's
 // Tailscale address only, accepts only tailnet clients, answers only to the names given with --name
@@ -62,7 +63,14 @@ const OFFLINE_PAGE = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"
 export async function startRelay({ listen, port = 80, names = [], log = message => console.error(message), allowAddress = isTailnet } = {}) {
   listen ||= tailscaleAddress();
   if (!listen) throw new Error('No Tailscale address found on this server. Connect it to your tailnet (tailscale up), or pass --listen <tailscale IP>.');
-  if (['0.0.0.0', '::'].includes(listen)) throw new Error('Listening on every interface would expose the console without a login. Use the Tailscale address.');
+  if (['0.0.0.0', '::'].includes(listen)) throw new Error('Listening on every interface would expose the console without a login. Use the Tailscale address, or 127.0.0.1 behind nginx.');
+  // Behind a reverse proxy on this server (nginx), the client is the proxy; the real address comes in X-Real-IP.
+  const behindProxy = ['127.0.0.1', '::1', 'localhost'].includes(listen);
+  const clientAddress = req => {
+    const peer = req.socket.remoteAddress || '';
+    const loopback = /^(::ffff:)?127\.|^::1$/.test(peer);
+    return behindProxy && loopback ? String(req.headers['x-real-ip'] || '') : peer;
+  };
 
   const queue = [];            // browser requests waiting for a laptop poll
   const polls = [];            // laptop polls waiting for a browser request
@@ -123,7 +131,7 @@ export async function startRelay({ listen, port = 80, names = [], log = message 
 
   server = http.createServer(async (req, res) => {
     try {
-      if (!allowAddress(req.socket.remoteAddress)) { res.writeHead(403); return res.end(); }
+      if (!allowAddress(clientAddress(req))) { res.writeHead(403); return res.end(); }
       const url = new URL(req.url, 'http://relay');
       // Only by a name of this relay, and never sent by another web page (that would also let a page take the laptop's polls).
       if (!hostAllowed(req.headers.host)) return json(res, 421, { error: `Open the console by its address${names[0] ? ` (http://${names[0]})` : ''}.` });
