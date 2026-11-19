@@ -39,10 +39,19 @@ export function demoTransport({ stateDir, delayMs = 700, log = () => {} }) {
       const codex = /\bcodex\b|fusion|cad/.test(lower);
       const claude = /\bclaude\b|review|read-only/.test(lower);
       const assignee = codex && claude ? 'both' : codex ? 'codex' : claude ? 'claude' : 'unclear';
-      later(900, () => post(to, { kind: 'route', request_id: id, assignee,
+      if (/^(hi|hello|hey|alo|ping)\b|\?\s*$/i.test(verbatim.trim()) && !/\b(fix|edit|change|update|implement)\b/i.test(lower)) {
+        later(900, () => post(to, { kind: 'route', request_id: id, request_type: 'chat', assignee: codex !== claude ? (codex ? 'codex' : 'claude') : 'both',
+          interpretation: 'A question or greeting; it needs an answer, not work.' }));
+        return;
+      }
+      later(900, () => post(to, { kind: 'route', request_id: id, request_type: 'task', assignee,
         interpretation: assignee === 'unclear' ? '' : `The request is about ${codex ? 'CAD/Fusion work' : ''}${codex && claude ? ' and ' : ''}${claude ? 'a review' : ''}.`,
         question: assignee === 'unclear' ? 'Who should carry this out?' : assignee === 'both' ? 'Should both work on it, each within their role?' : '',
         options: assignee === 'unclear' || assignee === 'both' ? ['Codex', 'Claude', 'Both'] : [] }));
+      return;
+    }
+    if (message.includes('CONVERSATION — the user is talking')) {
+      later(1000, () => post(to, { kind: 'reply', request_id: id, message: to === 'codex' ? 'Codex here — I can hear you (simulated).' : 'Claude here — loud and clear (simulated).' }));
       return;
     }
     if (message.includes('FOR YOUR INFORMATION ONLY')) { later(1200, () => post(to, { kind: 'ack', request_id: id })); return; }

@@ -153,7 +153,8 @@ export function applyAgentPost(state, agent, args) {
     if (state.router !== agent || request.routing?.router !== agent) throw new Error('Only the selected router may route this request.');
     const assignee = args.assignee;
     if (!['codex', 'claude', 'both', 'unclear'].includes(assignee)) throw new Error('assignee must be codex, claude, both, or unclear.');
-    const decision = { assignee, interpretation: args.interpretation?.trim() || '', question: args.question?.trim() || '',
+    const requestType = args.request_type === 'chat' ? 'chat' : 'task';
+    const decision = { assignee, requestType, interpretation: args.interpretation?.trim() || '', question: args.question?.trim() || '',
       options: Array.isArray(args.options) ? args.options.filter(o => typeof o === 'string' && o.trim()).slice(0, 6).map(o => o.slice(0, 200)) : [],
       at: now() };
     const event = addEvent(state, { from: agent, to: 'user', kind: 'route', requestId: request.id, text: message || describeDecision(decision), decision });
@@ -162,6 +163,12 @@ export function applyAgentPost(state, agent, args) {
       return { event, applied: false };
     }
     request.routing.decision = decision;
+    // A plain question or conversation needs no executor: whoever it addresses (both if unclear)
+    // answers, and nobody is allowed to act on it, so it goes out without asking the user.
+    if (requestType === 'chat') {
+      sendChat(request, assignee === 'codex' || assignee === 'claude' ? [assignee] : AGENTS, 'router');
+      return { event, applied: true };
+    }
     // Only a single, clear executor is assigned automatically. Two executors, a split, or doubt
     // always comes back to the user, so the router never puts both agents to work by itself.
     if (assignee === 'codex' || assignee === 'claude') assign(request, [assignee], 'router');
@@ -175,6 +182,8 @@ export function applyAgentPost(state, agent, args) {
       // An agent's own report proves it read the request; transport success alone never does.
       delivery.readAt ??= event.at;
       if (kind === 'done' && delivery.purpose === 'assign') delivery.doneAt = event.at;
+      // A chat message is complete once that agent answered it.
+      if (['reply', 'done'].includes(kind) && (delivery.purpose === 'chat' || delivery.purpose === 'reply')) delivery.doneAt = event.at;
       if (kind === 'blocked' && delivery.purpose === 'assign') delivery.blockedAt = event.at;
     }
   }
@@ -202,10 +211,20 @@ export function assign(request, assignees, by, clarification) {
   for (const agent of request.observers) addDelivery(request, { to: agent, purpose: 'observe' });
 }
 
+/** A conversational message: each recipient answers; nobody is assigned work. */
+export function sendChat(request, agents, by) {
+  request.kind = 'chat';
+  request.assignees = AGENTS.filter(agent => agents.includes(agent));
+  request.observers = [];
+  request.assignedBy = by;
+  request.status = 'dispatching';
+  for (const agent of request.assignees) addDelivery(request, { to: agent, purpose: 'chat' });
+}
+
 /** Overall request phase, derived from its deliveries, for the list and the attention counter. */
 export function requestPhase(request) {
   if (request.status === 'routing' || request.status === 'awaiting_user' || request.status === 'cancelled') return request.status;
-  const work = request.deliveries.filter(d => d.purpose === 'assign' || d.purpose === 'reply');
+  const work = request.deliveries.filter(d => ['assign', 'reply', 'chat'].includes(d.purpose));
   const all = request.deliveries.filter(d => d.purpose !== 'route');
   if (all.some(d => d.status === 'failed' || d.status === 'uncertain')) return 'delivery_problem';
   if (all.some(d => d.status === 'pending' || d.status === 'sending')) return 'dispatching';

@@ -52,7 +52,11 @@ Stop it with Ctrl+C. Your selection, router, roles, and history are saved and sh
 1. **Choose the sessions.** Click *Choose session…* under Codex and under Claude. The list shows each session's title, folder, exact ID, client or discovery source, and status. Search by any of them. The console remembers your choice. If a selected session disappears, for example because it was closed or replaced by `/clear`, the card turns red and says so. The console never switches to another session by itself; choose again yourself.
 2. **Choose the router.** Use the *Router* switch (Codex or Claude). The header always shows which session is the router.
 3. **Set roles (optional).** For example, Codex "edits the Fusion design" and Claude "read-only review". Roles are sent with every request, so receiving the same message never means both may edit.
-4. **Send.** The line above the composer shows the recipients before you send:
+4. **Send.** Pick **Chat** or **Task** next to the composer.
+   - **Chat** is for questions and conversation. It goes straight to the sessions you `@mention`, or to both, with no router and no choice to make. They answer with `console_post` and must not edit files or run commands because of it. If a chat really asks for work, they say so and you send it as a Task.
+   - **Task** is for work, as below. Even in Task mode, the router sends a message that is only a question or greeting straight out as a chat, so nobody has to be assigned.
+
+   The line above the composer shows the recipients before you send:
    - `@codex`, `@claude`, or `@all` names who does the work. The request goes straight to them, without the router. `@all` assigns both, each within its own role.
    - With no `@`, the request goes to the router for **triage only**. If your text clearly names the executor, the router assigns that agent, and its reading is shown separately and labelled as the router's words. If it is unclear, or the router proposes both, the request waits for you with **Codex does it / Claude does it / Both** buttons and a box for extra details. Nobody starts until you choose. You can also choose directly before the router answers. If the router cannot be reached, the request waits for you.
    - *Send an FYI copy…* gives the other agent a copy marked **FYI only — not assigned**.

@@ -81,8 +81,9 @@ footer{border-top:1px solid var(--line);background:var(--panel);padding:10px 16p
     <footer>
       <div id="replyBar" class="row" hidden></div>
       <div id="preview"></div>
-      <textarea id="composer" placeholder="Message the selected sessions… Use @codex, @claude or @all to name who does the work; without an @ the router asks you first. (Ctrl+Enter to send)"></textarea>
+      <textarea id="composer" placeholder="Chat: ask or talk — goes straight to both (or whoever you @mention), they only answer. Task: work — @codex / @claude / @all assigns it, without an @ the router triages first. (Ctrl+Enter to send)"></textarea>
       <div class="row">
+        <div class="seg" id="kindSeg" role="group" aria-label="Message type" title="Chat: a question or conversation — sent at once, agents only answer. Task: work — goes to the router unless you @mention who does it."><button data-kind="chat">Chat</button><button data-kind="task">Task</button></div>
         <button data-insert="@codex ">@codex</button><button data-insert="@claude ">@claude</button><button data-insert="@all ">@all</button>
         <label class="row" style="gap:4px;font-size:12.5px;color:var(--muted)"><input type="checkbox" id="notifyOther" checked style="width:auto"> Send an FYI copy to the agent that is not assigned</label>
         <span class="spacer"></span>
@@ -97,12 +98,13 @@ footer{border-top:1px solid var(--line);background:var(--panel);padding:10px 16p
 const token = (new URLSearchParams(location.hash.slice(1)).get('t')) || sessionStorage.getItem('bridgeConsoleToken') || '';
 if (token) { sessionStorage.setItem('bridgeConsoleToken', token); history.replaceState(null, '', location.pathname); }
 const LABEL = { codex: 'Codex', claude: 'Claude', user: 'You', system: 'System' };
-const PURPOSE = { route: 'Router — triage only', assign: 'Assigned to do it', observe: 'FYI only', reply: 'Reply' };
+const PURPOSE = { route: 'Router — triage only', assign: 'Assigned to do it', observe: 'FYI only', reply: 'Reply', chat: 'Chat — answers only' };
 const KIND = { ack: 'read', progress: 'progress', done: 'done', blocked: 'blocked', question: 'asks you', reply: 'reply', route: 'router decision',
   peer: 'AI↔AI', manual: 'sent by hand from the Codex panel', choice: 'your choice', cancel: 'cancelled', selection: 'session selection', router: 'router', route_failed: 'router unreachable', peer_limit: 'AI↔AI limit', peer_grant: 'more allowed' };
 const PHASE = { routing: ['Router is triaging', 'muted'], awaiting_user: ['Waiting for you to choose who does it', 'warn'], dispatching: ['Delivering', 'muted'],
   delivered: ['Delivered — not yet confirmed read', 'muted'], in_progress: ['In progress', 'codex'], done: ['Done', 'ok'], delivery_problem: ['Delivery problem', 'bad'], cancelled: ['Cancelled', 'muted'] };
 let S = null, lastVersion = -1, tab = 'all', replyTo = null, drafts = {}, pending = false;
+let kind = localStorage.getItem('bridgeConsoleKind') === 'chat' ? 'chat' : 'task';
 const $ = id => document.getElementById(id);
 function el(tag, attrs = {}, ...kids) {
   const node = document.createElement(tag);
@@ -258,7 +260,8 @@ function deliveryRows(r) {
     else steps.append(el('span', { class: 'step on' }, '✓ delivered'));
     if (d.purpose !== 'route') {
       steps.append(el('span', { class: `step ${d.readAt ? 'on' : ''}`, title: 'Set only when the receiving session itself reports back' }, d.readAt ? `✓ read ${time(d.readAt)}` : 'not confirmed read'));
-      if (d.purpose === 'assign' || d.purpose === 'reply') steps.append(d.blockedAt && !d.doneAt ? el('span', { class: 'step bad' }, 'blocked')
+      if (d.purpose === 'chat') steps.append(el('span', { class: `step ${d.doneAt ? 'on' : ''}` }, d.doneAt ? `✓ answered ${time(d.doneAt)}` : 'no answer yet'));
+      else if (d.purpose === 'assign' || d.purpose === 'reply') steps.append(d.blockedAt && !d.doneAt ? el('span', { class: 'step bad' }, 'blocked')
         : el('span', { class: `step ${d.doneAt ? 'on' : ''}` }, d.doneAt ? `✓ done ${time(d.doneAt)}` : 'not done'));
     } else steps.append(el('span', { class: `step ${r.routing?.decision ? 'on' : ''}` }, r.routing?.decision ? '✓ triaged' : 'waiting for router'));
     const actions = el('div', { class: 'row' });
@@ -300,14 +303,16 @@ function requestCard(r, events) {
   const card = el('article', { class: `card from-user ${r.phase === 'awaiting_user' ? 'attn' : ''} ${r.phase === 'delivery_problem' ? 'problem' : ''}`, id: `req-${r.id}` });
   const recipients = r.status === 'routing' || r.status === 'awaiting_user'
     ? [el('span', { class: 'chip muted' }, `→ Router ${LABEL[r.routing?.router]} (triage only)`)]
+    : r.kind === 'chat' ? r.assignees.map(a => agentChip(a, `${LABEL[a]}: answers`))
     : [...r.assignees.map(a => agentChip(a, `${LABEL[a]}: ${r.mode === 'reply' ? 'reply' : 'does it'}`)), ...r.observers.map(a => el('span', { class: 'chip muted' }, `${LABEL[a]}: FYI`))];
   card.append(...[el('div', { class: 'chead' }, el('b', {}, `#${r.id}`), el('span', { class: 'chip user' }, 'You'), ...recipients,
     el('span', {}, dateTime(r.createdAt)), el('span', { class: 'spacer' }), el('span', { class: `chip ${phaseClass}` }, phaseText)),
   r.replyTo ? el('div', { class: 'meta' }, `↳ replying to ${LABEL[r.replyTo.from]} (${r.replyTo.eventId}${r.replyTo.requestId ? ` in #${r.replyTo.requestId}` : ''})`) : null,
   el('div', { class: 'body' }, r.message),
   r.mode === 'mention' ? el('div', { class: 'meta' }, 'You named the executor with @ — the router was not involved.') : null,
+  r.kind === 'chat' ? el('div', { class: 'meta' }, r.assignedBy === 'router' ? `Router ${LABEL[r.routing.router]} saw a question, not a task: sent for answers only; nobody acts on it.` : 'Chat: sent for answers only; nobody acts on it.') : null,
   r.clarification ? el('div', { class: 'meta' }, `You chose: ${r.clarification.choice === 'both' ? 'both' : LABEL[r.clarification.choice]}${r.clarification.overrodeRouter ? ' (before the router answered)' : ''}${r.clarification.note ? ` — "${r.clarification.note}"` : ''}`) : null,
-  r.assignedBy === 'router' ? el('div', { class: 'meta' }, `Router ${LABEL[r.routing.router]} assigned ${r.assignees.map(a => LABEL[a]).join(' + ')} because the request clearly names the executor.`) : null,
+  r.assignedBy === 'router' && r.kind !== 'chat' ? el('div', { class: 'meta' }, `Router ${LABEL[r.routing.router]} assigned ${r.assignees.map(a => LABEL[a]).join(' + ')} because the request clearly names the executor.`) : null,
   r.assignedBy === 'router' && r.routing?.decision?.interpretation ? el('div', { class: 'interp' }, `Router interpretation (not your words): ${r.routing.decision.interpretation}`) : null,
   ['routing', 'awaiting_user'].includes(r.status) ? askBlock(r) : null,
   deliveryRows(r)].filter(Boolean));
@@ -350,7 +355,14 @@ function renderPreview() {
   const parts = [el('span', { class: 'meta' }, 'Recipients:')];
   let problem = '';
   if (!assignees.length && replyTo) assignees = [replyTo.from];
-  if (assignees.length) {
+  document.querySelectorAll('#kindSeg button').forEach(b => b.classList.toggle('on', b.dataset.kind === kind));
+  $('notifyOther').parentElement.hidden = kind === 'chat';
+  if (kind === 'chat' && !replyTo) {
+    const to = assignees.length ? assignees : ['codex', 'claude'].filter(a => S?.selection[a]);
+    for (const a of to) parts.push(agentChip(a, `${LABEL[a]} — answers only`));
+    if (!to.length) problem = 'Select a session first.';
+    for (const a of to) if (!S?.selection[a]) problem = `No ${LABEL[a]} session selected.`;
+  } else if (assignees.length) {
     for (const a of assignees) parts.push(agentChip(a, `${LABEL[a]} — ${!found.size && replyTo ? 'reply' : 'does it'}`));
     if (!(!found.size && replyTo) && notify) for (const a of ['codex', 'claude'].filter(a => !assignees.includes(a))) parts.push(el('span', { class: 'chip muted' }, `${LABEL[a]} — FYI only`));
     for (const a of assignees) if (!S?.selection[a]) problem = `No ${LABEL[a]} session selected.`;
@@ -369,7 +381,7 @@ async function send() {
   const clientId = sessionStorage.getItem('bridgeConsoleDraftId') || crypto.randomUUID();
   sessionStorage.setItem('bridgeConsoleDraftId', clientId);
   try {
-    await act('/api/submit', { clientId, message, replyTo: replyTo?.id, notifyOther: $('notifyOther').checked });
+    await act('/api/submit', { clientId, message, replyTo: replyTo?.id, notifyOther: $('notifyOther').checked, kind });
     $('composer').value = ''; replyTo = null; sessionStorage.removeItem('bridgeConsoleDraftId'); sessionStorage.removeItem('bridgeConsoleDraft');
     const box = $('timeline'); box.scrollTop = box.scrollHeight;
   } catch {} finally { pending = false; renderPreview(); }
@@ -425,6 +437,7 @@ $('composer').value = sessionStorage.getItem('bridgeConsoleDraft') || '';
 $('composer').addEventListener('input', () => { sessionStorage.setItem('bridgeConsoleDraft', $('composer').value); sessionStorage.removeItem('bridgeConsoleDraftId'); renderPreview(); });
 $('composer').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } });
 $('notifyOther').addEventListener('change', renderPreview);
+document.querySelectorAll('#kindSeg button').forEach(b => b.addEventListener('click', () => { kind = b.dataset.kind; localStorage.setItem('bridgeConsoleKind', kind); renderPreview(); }));
 $('sendBtn').addEventListener('click', send);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') $('modalRoot').replaceChildren(); });
 poll(true);
