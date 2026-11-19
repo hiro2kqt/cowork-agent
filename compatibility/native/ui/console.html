@@ -8,6 +8,7 @@
 :root{--bg:#f7f7f5;--panel:#fff;--line:#e6e5e1;--text:#1d1d1b;--muted:#8a8984;--soft:#f0efec;--codex:#4355c4;--claude:#c4623d;--ok:#1f8a4c;--warn:#b26a00;--warn-bg:#fff6e0;--bad:#c0362c;--bad-bg:#fdeeec;--r:10px;font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 @media (prefers-color-scheme:dark){:root{--bg:#141413;--panel:#1c1c1b;--line:#2e2e2c;--text:#ecebe8;--muted:#8f8d87;--soft:#252523;--codex:#98a4f2;--claude:#ef9f7f;--ok:#62cc8f;--warn:#efb04f;--warn-bg:#33291a;--bad:#f0857c;--bad-bg:#3a1f1d}}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--text);height:100vh;display:flex}
 button{font:inherit;color:inherit;background:none;border:1px solid var(--line);border-radius:7px;padding:4px 10px;cursor:pointer}
 button:hover{border-color:var(--muted)}button:disabled{opacity:.4;cursor:default}
@@ -103,9 +104,6 @@ footer{border-top:1px solid var(--line);padding:12px 20px;display:flex;flex-dire
     <div id="pendingFiles" class="chips" hidden></div>
     <textarea id="composer" rows="2" placeholder="Message…  @codex  @claude  @all"></textarea>
     <div class="row">
-      <div class="seg" id="kindSeg" title="Chat: they only answer. Task: work; without an @ the router decides who does it.">
-        <button data-kind="chat">Chat</button><button data-kind="task">Task</button>
-      </div>
       <button class="ghost" id="attachBtn" title="Attach images, 3D models, or files (you can also paste or drop them)">📎</button>
       <input type="file" id="fileInput" multiple hidden>
       <div id="to" class="to row wrap grow"></div>
@@ -128,7 +126,8 @@ const PHASE = { routing: ['Triaging', ''], awaiting_user: ['Choose who', 'warn']
 const ROLE = { route: 'triage', assign: '', observe: 'FYI', reply: 'reply', chat: '' };
 let S = null, lastVersion = -1, lastAvail = '', tab = 'all', replyTo = null, drafts = {}, pending = false, uploading = 0;
 let attached = JSON.parse(sessionStorage.getItem('bridgeConsoleFiles') || '[]');
-let kind = localStorage.getItem('bridgeConsoleKind') === 'task' ? 'task' : 'chat';
+// One mode: @mentions assign directly; otherwise the router decides whether it is a question or work, and who does it.
+const kind = 'task';
 const $ = id => document.getElementById(id);
 function el(tag, attrs = {}, ...kids) {
   const node = document.createElement(tag);
@@ -441,7 +440,6 @@ function renderComposer() {
   bar.hidden = !replyTo;
   if (replyTo) bar.replaceChildren(`↳ Replying to ${NAME[replyTo.from]}: ${replyTo.text.slice(0, 80)}${replyTo.text.length > 80 ? '…' : ''}`,
     el('button', { class: 'ghost', onclick: () => { replyTo = null; renderComposer(); } }, '×'));
-  document.querySelectorAll('#kindSeg button').forEach(b => b.classList.toggle('on', b.dataset.kind === kind));
   const text = $('composer').value;
   let named = mentions(text);
   const parts = [];
@@ -459,13 +457,13 @@ function renderComposer() {
   else problem = 'choose a router, or @mention';
   for (const a of named) if (!sel(a)) problem = `no ${NAME[a]} session`;
   $('to').replaceChildren(problem ? el('span', { style: 'color:var(--bad)' }, problem) : el('span', { class: 'muted' }, ...parts));
-  $('fyiBox').hidden = kind === 'chat' || Boolean(replyTo);
+  $('fyiBox').hidden = Boolean(replyTo);
   $('sendBtn').disabled = pending || uploading > 0 || (!text.trim() && !attached.length) || Boolean(problem);
   const chips = $('pendingFiles');
   chips.hidden = !attached.length && !uploading;
   chips.replaceChildren(...attached.map(f => el('span', { class: 'chip', title: bytes(f.size) }, `${ICON[f.kind] || ICON.other} ${f.name}`,
     el('button', { class: 'ghost', style: 'padding:0 4px', title: 'Remove', onclick: () => { attached = attached.filter(x => x !== f); saveAttached(); renderComposer(); } }, '×'))),
-    uploading ? el('span', { class: 'small muted' }, `Uploading ${uploading}…`) : null);
+    ...(uploading ? [el('span', { class: 'small muted' }, `Uploading ${uploading}…`)] : []));
 }
 
 async function send() {
@@ -534,7 +532,6 @@ composer.addEventListener('keydown', e => {
   e.preventDefault();
   send();
 });
-document.querySelectorAll('#kindSeg button').forEach(b => b.addEventListener('click', () => { kind = b.dataset.kind; localStorage.setItem('bridgeConsoleKind', kind); renderComposer(); }));
 $('notifyOther').addEventListener('change', renderComposer);
 $('sendBtn').addEventListener('click', send);
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && !viewerClose) $('modalRoot').replaceChildren(); });

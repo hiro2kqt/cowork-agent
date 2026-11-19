@@ -346,6 +346,7 @@ export function renderEnvelope(state, request, delivery, lookupFile = () => null
     assign: [
       `You are ASSIGNED to carry out this request${request.assignees.length > 1 ? ' together with the other agent, each within your own role' : ''}.`,
       'Work only within your role and scope below and within your own app\'s normal permissions.',
+      'If the message only asks a question or chats, just answer: console_post kind="done" with your answer as the message.',
     ],
     observe: [
       `FOR YOUR INFORMATION ONLY — you are NOT assigned. ${request.assignees.map(a => AGENT_LABEL[a]).join(' + ')} carries it out.`,
