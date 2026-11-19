@@ -189,8 +189,9 @@ function tile(meta, list, index) {
   return el('button', { class: 'att', title: `${meta.name} · ${bytes(meta.size)}${meta.by ? ` · from ${NAME[meta.by] || meta.by}` : ''}`, onclick: () => openViewer(list, index) },
     thumb, el('span', { class: 'cap' }, meta.name));
 }
-function attachmentsView(ids) {
-  const list = (ids || []).map(metaOf).filter(Boolean);
+/** `shown` (per card) keeps a file that several messages mention from appearing more than once. */
+function attachmentsView(ids, shown) {
+  const list = (ids || []).filter(id => !shown || (!shown.has(id) && shown.add(id))).map(metaOf).filter(Boolean);
   return list.length ? el('div', { class: 'atts' }, ...list.map((m, i) => tile(m, list, i))) : null;
 }
 
@@ -321,8 +322,9 @@ function renderTabs() {
 }
 
 /* ---------- timeline ---------- */
-function eventRow(e) {
-  if (e.from === 'system' || ['selection', 'router', 'choice', 'cancel', 'peer_grant'].includes(e.kind)) return null;
+function eventRow(e, shown) {
+  // The router's decision is already the card's "→ …" line and its reading is shown once on the card.
+  if (e.from === 'system' || ['selection', 'router', 'choice', 'cancel', 'peer_grant', 'route'].includes(e.kind)) return null;
   if (e.kind === 'ack' && !e.text?.trim()) return null;
   if (e.kind === 'ack' && e.text === 'Read the request.') return null;
   const peer = e.kind === 'peer' || e.kind === 'manual';
@@ -330,7 +332,7 @@ function eventRow(e) {
   const tag = peer ? ` → ${NAME[e.to]}` : e.kind === 'question' ? ' asks' : e.kind === 'done' ? ' ✓' : e.kind === 'blocked' ? ' blocked' : '';
   return el('div', { class: `ev ${peer ? 'peer' : ''}`, title: full(e.at) },
     el('span', {}, from, el('span', { class: 'muted small' }, tag)),
-    el('span', { class: 'msg' }, e.attachments ? stripFiles(e.text) : e.text, attachmentsView(e.attachments), e.decision?.interpretation ? el('div', { class: 'interp' }, `Router's reading: ${e.decision.interpretation}`) : null,
+    el('span', { class: 'msg' }, e.attachments ? stripFiles(e.text) : e.text, attachmentsView(e.attachments, shown),
       e.error ? el('div', { class: 'err' }, e.error) : null),
     peer && e.peerStatus !== 'submitted' ? el('span', { class: 'badge bad' }, e.peerStatus === 'failed' ? 'not sent' : e.peerStatus) : null,
     AGENTS.includes(e.from) && !peer ? el('button', { class: 'ghost small reply', onclick: () => setReply(e) }, 'Reply') : null);
@@ -363,7 +365,21 @@ function deliveries(r) {
           d.attempts.length > 1 ? `\n\n— ${d.attempts.length} attempts: ${d.attempts.map(a => `${time(a.at)} ${a.status}`).join(', ')}` : '')) : null),
       d.error && status !== 'submitted' ? el('div', { class: 'err' }, d.error) : null);
   });
-  return rows.length ? el('div', { class: 'deliv' }, ...rows) : null;
+  if (!rows.length) return null;
+  // Delivery details only matter when something went wrong; otherwise they fold away.
+  const trouble = r.deliveries.some(d => d.stale || ['failed', 'uncertain'].includes(d.status));
+  return trouble ? el('div', { class: 'deliv' }, ...rows) : el('details', {}, el('summary', {}, 'details'), el('div', { class: 'deliv', style: 'margin-top:6px' }, ...rows));
+}
+
+/** One short word per recipient for the card header. */
+function shortStatus(d) {
+  const status = d.stale ? 'uncertain' : d.status;
+  if (status === 'failed') return ['not delivered', 'color:var(--bad)'];
+  if (status === 'uncertain') return ['uncertain', 'color:var(--warn)'];
+  if (status !== 'submitted') return ['sending…', ''];
+  if (d.blockedAt && !d.doneAt) return ['blocked', 'color:var(--bad)'];
+  if (d.doneAt) return ['✓', 'color:var(--ok)'];
+  return [d.readAt ? 'working' : 'sent', ''];
 }
 
 function ask(r) {
@@ -386,16 +402,22 @@ function card(r, events) {
   const [phase, tone] = PHASE[r.phase] || [r.phase, ''];
   const waiting = r.status === 'routing' || r.status === 'awaiting_user';
   const to = waiting ? [el('span', { class: 'muted' }, `→ router ${NAME[r.routing?.router]}`)]
-    : [el('span', { class: 'muted' }, '→'), ...r.assignees.map(a => el('span', { class: a, style: 'font-weight:600' }, NAME[a])),
-      ...r.observers.map(a => el('span', { class: 'muted' }, `(FYI ${NAME[a]})`))];
-  const thread = events.map(eventRow).filter(Boolean);
+    : [el('span', { class: 'muted' }, '→'), ...r.deliveries.filter(d => d.purpose !== 'route').map(d => {
+      const [word, style] = shortStatus(d);
+      const fyi = d.purpose === 'observe';
+      return el('span', { class: fyi ? 'muted' : '' }, el('span', { class: fyi ? '' : d.to, style: fyi ? '' : 'font-weight:600' }, fyi ? `FYI ${NAME[d.to]}` : NAME[d.to]),
+        ' ', el('span', { class: 'small muted', style }, fyi && word === 'working' ? '✓' : word));
+    })];
+  const shown = new Set();
+  const own = attachmentsView(r.attachments, shown);
+  const thread = events.map(e => eventRow(e, shown)).filter(Boolean);
   return el('article', { class: `card ${r.phase === 'awaiting_user' ? 'attn' : ''} ${r.phase === 'delivery_problem' ? 'problem' : ''}` },
     el('div', { class: 'head' }, el('span', { class: 'muted' }, `#${r.id}`), el('b', {}, 'You'), ...to,
       r.kind === 'chat' ? el('span', { class: 'badge' }, 'chat') : null,
       el('span', { class: 'grow' }), el('span', { class: 'muted', title: full(r.createdAt) }, time(r.createdAt)), el('span', { class: `badge ${tone}` }, phase)),
     r.replyTo ? el('div', { class: 'small muted' }, `↳ reply to ${NAME[r.replyTo.from]}`) : null,
     el('div', { class: 'msg' }, r.message),
-    attachmentsView(r.attachments),
+    own,
     r.clarification?.note ? el('div', { class: 'small muted' }, `Note: ${r.clarification.note}`) : null,
     !waiting && r.routing?.decision?.interpretation ? el('div', { class: 'interp' }, `Router's reading: ${r.routing.decision.interpretation}`) : null,
     waiting ? ask(r) : null,
