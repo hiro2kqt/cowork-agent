@@ -33,10 +33,17 @@ test('an npm codex.cmd shim resolves to the vendored native executable beside it
 });
 
 test('nothing on PATH yields null and the Path spelling is honored', () => {
-  assert.equal(resolveCodexExecutable({ env: { PATH: '' }, exists: () => false }), null);
+  assert.equal(resolveCodexExecutable({ env: { PATH: '' }, exists: () => false, platform: 'win32' }), null);
   const bin = path.join(os.tmpdir(), 'bin');
   const direct = path.join(bin, 'codex.exe');
-  assert.equal(resolveCodexExecutable({ env: { Path: bin }, exists: filesOnly([direct]) }), direct);
+  assert.equal(resolveCodexExecutable({ env: { Path: bin }, exists: filesOnly([direct]), platform: 'win32' }), direct);
+});
+
+test('Linux and macOS use the executable codex on PATH', () => {
+  const found = path.join('/opt', 'b', 'codex');
+  assert.equal(resolveCodexExecutable({ env: { PATH: ['/opt/a', '/opt/b'].join(path.delimiter) }, platform: 'linux',
+    executable: file => file === found }), found);
+  assert.equal(resolveCodexExecutable({ env: { PATH: '/opt/a' }, platform: 'darwin', executable: () => false }), null);
 });
 
 // Shim shapes from the generators: npm's cmd-shim (%dp0%), pnpm's @zkochan/cmd-shim (%~dp0 or an absolute target), Volta's `volta run`.

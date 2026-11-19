@@ -13,6 +13,9 @@
   },
   "private": true,
   "type": "module",
+  "bin": {
+    "agent-bridge": "scripts/agent-bridge.mjs"
+  },
   "description": "Asynchronous two-way messaging between Claude Code and Codex conversations.",
   "engines": {
     "node": ">=20"

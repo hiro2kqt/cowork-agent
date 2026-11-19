@@ -62,11 +62,20 @@ test('Darwin identity refuses stale PIDs, foreign domains and failed process pro
   }
 });
 
-test('unverified Linux and other process identity contracts fail before probing', () => {
-  for (const platform of ['linux', 'freebsd']) {
-    assert.throws(() => assertClaudeProcessIdentity({ ...darwinRecord, pidDomain: platform }, { platform,
-      spawn() { assert.fail('Unsupported process identity must not fall back to PID liveness'); } }), /only on Windows and macOS/);
-  }
+test('other process identity contracts fail before probing', () => {
+  assert.throws(() => assertClaudeProcessIdentity({ ...darwinRecord, pidDomain: 'freebsd' }, { platform: 'freebsd',
+    spawn() { assert.fail('Unsupported process identity must not fall back to PID liveness'); } }), /only on Windows, macOS, and Linux/);
+});
+
+test('Linux process identity checks the machine, PID namespace, and /proc start time without spawning', () => {
+  const files = { '/etc/machine-id': 'abc123\n', '/proc/77/stat': '77 (claude (x) y) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 424242 99 100' };
+  const options = { platform: 'linux', readFile: file => { if (!(file in files)) throw new Error('ENOENT'); return files[file]; },
+    readLink: () => 'pid:[4026531836]', spawn() { assert.fail('Linux identity reads /proc directly'); } };
+  const record = { pid: 77, pidDomain: 'linux:abc123:pid:[4026531836]', procStart: '424242' };
+  assertClaudeProcessIdentity(record, options);
+  assert.throws(() => assertClaudeProcessIdentity({ ...record, procStart: '1' }, options), /offline or its process identity changed/);
+  assert.throws(() => assertClaudeProcessIdentity({ ...record, pidDomain: 'linux:other:pid:[4026531836]' }, options), /different process namespace/);
+  assert.throws(() => assertClaudeProcessIdentity({ ...record, pid: 78 }, options), /offline or its process identity changed/);
 });
 
 test('Windows process identity keeps its hostname and FILETIME validation', () => {

@@ -14,8 +14,9 @@ Two-way messaging between **Claude Code** and **Codex** conversations. Works wit
 - Node.js 20+ on `PATH`; no npm dependencies.
 - **Windows:** a local Claude Code session with a live messaging inbox, and Codex.
 - **macOS:** a local Claude Code session and an authenticated SSH alias for the Codex host.
+- **Linux (Ubuntu):** a local Claude Code session, and the Codex CLI with its daemon running (`codex app-server daemon start`). Codex Desktop does not run on Linux, so Codex is reached through the daemon or `codex queue`.
 
-Out of scope: WSL, Linux (sends fail closed), remote Claude sessions, and Claude's hosted Chat conversations.
+Out of scope: WSL, remote Claude sessions, and Claude's hosted Chat conversations.
 
 ## Installation
 
@@ -23,6 +24,15 @@ Out of scope: WSL, Linux (sends fail closed), remote Claude sessions, and Claude
 git clone https://github.com/KeeVeeG/claude-codex-bridge.git
 cd claude-codex-bridge
 node scripts/install.mjs
+```
+
+Then, optionally, add the `agent-bridge` command to your terminal (once, from the checkout):
+
+```sh
+npm link
+agent-bridge status     # what is open, what is missing
+agent-bridge            # start the Bridge Console
+agent-bridge help
 ```
 
 The installer needs the `claude` and `codex` CLIs for the applications you select (`--claude` or `--codex` for one; `--prepare-only` stages files without installing). It stages the native runtime under `~/plugins/bridge-claude-codex`, installs the plugin through both CLIs, and backs up any file it changes. Run it from a Codex Desktop task when you can: it then also registers the running Desktop for discovery from Claude. Run it again after pulling updates.

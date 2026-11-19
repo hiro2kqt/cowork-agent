@@ -33,8 +33,11 @@ The console is part of this repository and uses the same transports as the bridg
 ## Start the console
 
 ```sh
-node scripts/console.mjs            # or: npm run console
+agent-bridge                        # after `npm link` once in the checkout
+node scripts/console.mjs            # the same without the command
 ```
+
+`agent-bridge status` lists the open Claude Code sessions and Codex chats and says what is missing; `agent-bridge help` lists the other commands (`demo`, `connect`, `disconnect`, `install`, `relay`, `shortcut`).
 
 The command prints a URL such as `http://127.0.0.1:4317/#t=…` and opens it in your browser. The token in the URL changes on every start. If the browser does not open, copy the URL. Options:
 
@@ -95,7 +98,7 @@ The tabs *Needs you* and *Problems* collect everything that waits for you. **Cle
 
 ## Limits
 
-- Platform support is the bridge's: Windows (native), and macOS with Codex through an SSH host. Linux sends fail closed, so on Linux only `--demo` is useful.
+- Platform support is the bridge's: Windows (native), macOS with Codex through an SSH host, and Linux with the Codex CLI daemon (`codex app-server daemon start`; there is no Codex Desktop on Linux).
 - *Read* and *done* depend on the agents calling `console_post`. The message they receive tells them to, but an agent can forget. Transport success alone never marks a request read.
 - Claude receives console messages through its cross-session inbox, wrapped as a peer message named "Bridge Console (user)". Claude's `crossSessionInbound` settings can hold or refuse them, and Claude may ask you to confirm consequential actions. Codex Desktop receives them through its app-tools message route.
 - A stored Codex chat that is not open (`notLoaded`) is refused on the `auto` route. Open it, or re-select it with the `desktop` or `terminal` route.

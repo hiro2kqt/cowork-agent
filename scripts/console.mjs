@@ -222,7 +222,12 @@ if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import
   if (options.connect || options.disconnect) {
     const stateDir = path.resolve(options.stateDir || defaultStateDir({ env: process.env }));
     try {
-      if (options.disconnect) { forgetCloud(stateDir); console.log('Cloud relay forgotten.'); }
+      if (options.disconnect) {
+        forgetCloud(stateDir);
+        console.log('Cloud relay forgotten.');
+        if (await runningConsole({ stateDir: options.stateDir })) console.log('The running console disconnects when you restart it, or use Disconnect in its sidebar.');
+        process.exit(0);
+      }
       else { const saved = saveCloud(stateDir, options.connect); console.log(`Cloud relay saved: ${saved.url}. The console connects to it every time it starts.`); }
     } catch (error) { console.error(error.message); process.exit(2); }
     if (await runningConsole({ stateDir: options.stateDir })) {
