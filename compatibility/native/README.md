@@ -94,7 +94,7 @@ Incoming messages name their verified source, so a reply is just another `send_*
 - `desktop`: Desktop app-tools only.
 - `terminal`: the daemon for loaded conversations; `codex queue` for unloaded ones or when the daemon is unavailable. The queue delivers to an open session or holds the message until the session reopens. Queued text, including the bridge's peer notice, is limited to 16000 characters. IDs the daemon does not know are refused.
 
-Terminal messages arrive as a user turn wrapped in a peer notice; a session in mid-turn is steered without interruption. The bridge never starts the daemon. Set `CLAUDE_CODEX_BRIDGE_DAEMON=off` to disable the daemon and queue routes, and `CLAUDE_CODEX_BRIDGE_CODEX_BIN` to the path of `codex.exe` if it is not found on `PATH` or through an npm, pnpm, or Volta shim.
+Terminal messages arrive as a user turn wrapped in a peer notice; a session in mid-turn is steered without interruption. The bridge never starts the daemon. Set `CLAUDE_CODEX_BRIDGE_DAEMON=off` to disable the daemon and queue routes, and `CLAUDE_CODEX_BRIDGE_CODEX_BIN` to the path of `codex.exe` if it is not found on `PATH`, through an npm, pnpm, or Volta shim, or as the CLI bundled with Codex Desktop (`%LOCALAPPDATA%\OpenAI\Codex\bin\<build>\codex.exe`, newest build first).
 
 ## Troubleshooting
 
