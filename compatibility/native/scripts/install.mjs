@@ -10,6 +10,7 @@ import { defaultStatePath } from '../lib/state-directory.mjs';
 import { legacyEnvironmentWarnings } from '../lib/legacy-environment.mjs';
 import { validateSshHostAlias } from '../lib/codex-ssh.mjs';
 import { codexHome } from '../lib/codex-settings.mjs';
+import { resolveCodexExecutable } from '../lib/codex-binary.mjs';
 import { PLUGIN_NAME, COMMON_RUNTIME_FILES, NATIVE_RUNTIME_FILES, checkManifests, compatibilityFiles } from './manifests.mjs';
 
 export { PLUGIN_NAME };
@@ -482,13 +483,26 @@ export function prepareInstallation({ sourceRoot = projectRoot, homeDir = os.hom
     build, backupDirectory, marketplaceBackup, codex, claude };
 }
 
+function cliExecutable(command) {
+  if (process.platform !== 'win32') return command;
+  // An npm, pnpm, yarn, or Volta install puts only a codex.cmd shim on PATH, which cannot be spawned
+  // without a shell; resolve the vendored codex.exe it launches (or CLAUDE_CODEX_BRIDGE_CODEX_BIN).
+  if (command === 'codex') return resolveCodexExecutable() ?? 'codex.exe';
+  return `${command}.exe`;
+}
+
+const CLI_HINTS = {
+  codex: 'Install the Codex CLI (for example `npm install -g @openai/codex`, then `codex login`), or set CLAUDE_CODEX_BRIDGE_CODEX_BIN to the full path of codex.exe. To install only the Claude side now, run `node scripts/install.mjs --claude`.',
+  claude: 'Install Claude Code so that `claude` works in this terminal (https://docs.claude.com/en/docs/claude-code), or run `node scripts/install.mjs --codex` to install only the Codex side now.',
+};
+
 function run(command, args, { cwd } = {}) {
-  const executable = process.platform === 'win32' ? `${command}.exe` : command;
+  const executable = cliExecutable(command);
   const result = spawnSync(executable, args, {
     cwd, shell: false, windowsHide: true, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'],
     timeout: 120000, maxBuffer: 4 * 1024 * 1024,
   });
-  if (result.error) throw new Error(`Could not run ${command}: ${result.error.message}`);
+  if (result.error) throw new Error(`Could not run ${command}: ${result.error.message}${result.error.code === 'ENOENT' && CLI_HINTS[command] ? `\n${CLI_HINTS[command]}` : ''}`);
   if (result.status !== 0) {
     const detail = (result.stderr || result.stdout || '').trim().slice(0, 6000);
     throw new Error(`${command} ${args.slice(0, 3).join(' ')} failed (${result.status ?? result.signal}).${detail ? `\n${detail}` : ''}`);
