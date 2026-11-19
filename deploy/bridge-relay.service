@@ -1,17 +1,19 @@
 # /etc/systemd/system/bridge-relay.service
+# Runs the relay from this checkout as user hiro, with the nvm Node (no system Node on this machine).
 [Unit]
 Description=Bridge Relay (Bridge Console from the phone)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=/usr/bin/node /opt/cowork-agent/scripts/relay.mjs --name agents.hirolab.space --listen 127.0.0.1 --port 8787
+User=hiro
+WorkingDirectory=/home/hiro/working/opensource/cowork-agent
+ExecStart=/home/hiro/.nvm/versions/node/v24.14.1/bin/node scripts/relay.mjs --name agents.hirolab.space --listen 127.0.0.1 --port 8787
 Restart=always
 RestartSec=5
-DynamicUser=yes
 NoNewPrivileges=yes
 ProtectSystem=strict
-ProtectHome=yes
+ProtectHome=read-only
 PrivateTmp=yes
 
 [Install]
