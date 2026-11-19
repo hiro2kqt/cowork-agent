@@ -87,6 +87,7 @@ export async function startConsole({ port = 4317, demo = false, stateDir, token 
     'POST /api/cancel': body => engine.cancel(body),
     'POST /api/retry': body => engine.retry(body),
     'POST /api/peer-grant': () => engine.grantPeerTurns(),
+    'POST /api/clear': () => engine.clearHistory(),
   };
 
   const server = http.createServer(async (req, res) => {

@@ -69,7 +69,7 @@ Stop it with Ctrl+C. Your selection, router, roles, and history are saved and sh
    A delivery problem shows the error and a **Resend to …** button for that recipient only. A recipient that already received the message is never resent. An *uncertain* delivery may already have arrived, so the console asks you to check before you confirm a resend. *Show what was sent* displays the exact text each session received.
 6. **AI↔AI.** When Codex and Claude message each other with the bridge's `send_to_*` tools, those messages appear in the history, dashed and marked AI↔AI. They are linked to a request when they mention its `#R…` number. Direct AI↔AI messages between the selected pair are capped at 8 per user turn (see the sidebar). At the cap the bridge refuses further ones until you send something or click *Allow more*.
 
-The tabs *Needs me* and *Delivery problems* collect everything that waits for you.
+The tabs *Needs you* and *Problems* collect everything that waits for you. **Clear** empties the console history after a confirmation. It keeps your sessions, router, and roles, saves a copy under `<state dir>/console/archive/`, and never touches the Codex or Claude chats themselves.
 
 ## How it works
 

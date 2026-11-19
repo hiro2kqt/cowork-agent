@@ -191,7 +191,10 @@ function renderTabs() {
   const needs = S.requests.filter(r => r.phase === 'awaiting_user').length + openQuestions().length;
   const problems = S.requests.filter(r => r.phase === 'delivery_problem').length;
   $('tabs').replaceChildren(...[['all', 'All'], ['attn', 'Needs you', needs, 'warn'], ['problems', 'Problems', problems, 'bad'], ['peer', 'AI ↔ AI']].map(([key, label, n, tone]) =>
-    el('button', { class: `tab ${tab === key ? 'on' : ''}`, onclick: () => { tab = key; renderTabs(); renderTimeline(); } }, label, n ? el('span', { class: `badge ${tone}`, style: 'margin-left:6px' }, n) : null)));
+    el('button', { class: `tab ${tab === key ? 'on' : ''}`, onclick: () => { tab = key; renderTabs(); renderTimeline(); } }, label, n ? el('span', { class: `badge ${tone}`, style: 'margin-left:6px' }, n) : null)),
+    el('span', { class: 'grow' }),
+    el('button', { class: 'ghost small', title: 'Clear this console history (Codex and Claude keep their own chats)', disabled: !S.requests.length && !S.events.length,
+      onclick: () => { if (confirm('Clear the console history?\nCodex and Claude keep their own chats. A copy is archived.')) act('/api/clear', {}).catch(() => {}); } }, 'Clear'));
 }
 
 /* ---------- timeline ---------- */
