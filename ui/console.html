@@ -3,126 +3,125 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Bridge Console — Claude–Codex Bridge</title>
+<title>Bridge Console</title>
 <style>
-:root{--bg:#f6f6f4;--panel:#fff;--line:#e3e2de;--text:#1d1d1b;--muted:#6b6a66;--codex:#3f51b5;--codex-bg:#eceffb;--claude:#c15f3c;--claude-bg:#fbefe9;--user:#2f3b45;--user-bg:#eef1f3;--warn:#a86200;--warn-bg:#fff4dc;--bad:#b3261e;--bad-bg:#fdecea;--ok:#1e7a46;--ok-bg:#e6f4ec;--radius:10px;font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-@media (prefers-color-scheme:dark){:root{--bg:#161615;--panel:#201f1e;--line:#353431;--text:#ecebe8;--muted:#a09e98;--codex:#8f9df0;--codex-bg:#252a45;--claude:#f0a07f;--claude-bg:#3a2820;--user:#cfd8df;--user-bg:#283038;--warn:#f2b552;--warn-bg:#3a2f17;--bad:#f2867e;--bad-bg:#3d1f1d;--ok:#6fd39b;--ok-bg:#183326}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column}
-button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel);color:var(--text);border-radius:7px;padding:5px 10px}
-button:hover{border-color:var(--muted)}button.primary{background:var(--text);color:var(--panel);border-color:var(--text)}button:disabled{opacity:.45;cursor:default}
-button.link{border:0;background:none;padding:0;color:var(--muted);text-decoration:underline}
-textarea,input,select{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:6px 8px;width:100%}
-header{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
-header h1{font-size:15px;margin:0 8px 0 0}
-.chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:3px 10px;font-size:12.5px;border:1px solid transparent;white-space:nowrap}
-.chip.codex{background:var(--codex-bg);color:var(--codex)}.chip.claude{background:var(--claude-bg);color:var(--claude)}.chip.user{background:var(--user-bg);color:var(--user)}
-.chip.warn{background:var(--warn-bg);color:var(--warn)}.chip.bad{background:var(--bad-bg);color:var(--bad)}.chip.ok{background:var(--ok-bg);color:var(--ok)}.chip.muted{background:transparent;border-color:var(--line);color:var(--muted)}
-.dot{width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block}
-.router-tag{font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:1px 6px;border-radius:4px;background:currentColor}
-.router-tag span{color:var(--panel)}
-.spacer{flex:1}
-main{flex:1;display:flex;min-height:0}
-aside{width:320px;border-right:1px solid var(--line);overflow:auto;padding:14px;display:flex;flex-direction:column;gap:14px;background:var(--panel)}
-aside>*{flex-shrink:0}aside h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0}
-.pcard{border:1px solid var(--line);border-radius:var(--radius);padding:10px;display:flex;flex-direction:column;gap:6px}
-.pcard.codex{border-left:4px solid var(--codex)}.pcard.claude{border-left:4px solid var(--claude)}
-.pcard .title{font-weight:600;overflow-wrap:anywhere}.meta{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
-.row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-.banner{border-radius:8px;padding:8px 10px;font-size:13px}.banner.bad{background:var(--bad-bg);color:var(--bad)}.banner.warn{background:var(--warn-bg);color:var(--warn)}
-.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}.seg button{border:0;border-radius:0;flex:1}.seg button.on{background:var(--text);color:var(--panel)}
-#feed{flex:1;display:flex;flex-direction:column;min-width:0}
-#tabs{display:flex;gap:6px;padding:10px 16px 0}
-#tabs button.on{background:var(--text);color:var(--panel)}
-#timeline{flex:1;overflow:auto;padding:12px 16px 20px;display:flex;flex-direction:column;gap:12px}
-.empty{color:var(--muted);text-align:center;margin:auto;max-width:460px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px;display:flex;flex-direction:column;gap:8px}
-.card.attn{border:2px solid var(--warn);box-shadow:0 0 0 3px var(--warn-bg)}.card.problem{border-color:var(--bad)}
-.chead{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
-.chead b{color:var(--text)}
-.body{white-space:pre-wrap;word-break:break-word}
-.from-user>.body{background:var(--user-bg);border-radius:8px;padding:8px 10px}
-.deliv{display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;align-items:center;font-size:12.5px;border-top:1px dashed var(--line);padding-top:8px}
-.steps{display:flex;gap:4px;flex-wrap:wrap}
-.step{padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted);font-size:11.5px}
-.step.on{border-color:transparent;background:var(--ok-bg);color:var(--ok)}.step.bad{border-color:transparent;background:var(--bad-bg);color:var(--bad)}.step.warn{border-color:transparent;background:var(--warn-bg);color:var(--warn)}
-.err{grid-column:1/-1;color:var(--bad);font-size:12px}
-details{font-size:12.5px}details pre{white-space:pre-wrap;word-break:break-word;background:var(--bg);border-radius:6px;padding:8px;max-height:280px;overflow:auto;font-size:12px}
-.thread{display:flex;flex-direction:column;gap:6px;border-left:2px solid var(--line);margin-left:4px;padding-left:10px}
-.ev{font-size:13px}.ev .who{font-weight:600}.ev .body{margin-top:2px}
-.ev.peer{background:repeating-linear-gradient(135deg,transparent 0 6px,var(--bg) 6px 8px);border:1px dashed var(--line);border-radius:8px;padding:6px 8px}
-.ev.system{color:var(--muted);font-size:12px}
+:root{--bg:#f7f7f5;--panel:#fff;--line:#e6e5e1;--text:#1d1d1b;--muted:#8a8984;--soft:#f0efec;--codex:#4355c4;--claude:#c4623d;--ok:#1f8a4c;--warn:#b26a00;--warn-bg:#fff6e0;--bad:#c0362c;--bad-bg:#fdeeec;--r:10px;font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+@media (prefers-color-scheme:dark){:root{--bg:#141413;--panel:#1c1c1b;--line:#2e2e2c;--text:#ecebe8;--muted:#8f8d87;--soft:#252523;--codex:#98a4f2;--claude:#ef9f7f;--ok:#62cc8f;--warn:#efb04f;--warn-bg:#33291a;--bad:#f0857c;--bad-bg:#3a1f1d}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);height:100vh;display:flex}
+button{font:inherit;color:inherit;background:none;border:1px solid var(--line);border-radius:7px;padding:4px 10px;cursor:pointer}
+button:hover{border-color:var(--muted)}button:disabled{opacity:.4;cursor:default}
+button.primary{background:var(--text);color:var(--panel);border-color:var(--text)}
+button.ghost{border-color:transparent;color:var(--muted);padding:2px 6px}button.ghost:hover{color:var(--text)}
+input,textarea,select{font:inherit;color:inherit;background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:6px 9px;width:100%}
+input:focus,textarea:focus{outline:none;border-color:var(--muted)}
+.muted{color:var(--muted)}.small{font-size:12px}.codex{color:var(--codex)}.claude{color:var(--claude)}
+.row{display:flex;align-items:center;gap:8px}.grow{flex:1}.wrap{flex-wrap:wrap}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--muted);display:inline-block;flex:none}
+.dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.bad{background:var(--bad)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;padding:2px;gap:2px}
+.seg button{border:0;padding:3px 12px;border-radius:6px}.seg button.on{background:var(--soft);font-weight:600}
+.badge{font-size:11.5px;padding:1px 8px;border-radius:999px;background:var(--soft);color:var(--muted);white-space:nowrap}
+.badge.warn{background:var(--warn-bg);color:var(--warn)}.badge.bad{background:var(--bad-bg);color:var(--bad)}.badge.ok{color:var(--ok)}
+/* sidebar */
+aside{width:270px;flex:none;border-right:1px solid var(--line);background:var(--panel);padding:18px 14px;display:flex;flex-direction:column;gap:22px;overflow:auto}
+aside>*{flex-shrink:0}
+.brand{font-weight:700;font-size:15px}
+.label{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.session{display:flex;flex-direction:column;gap:2px;padding:9px 10px;border-radius:var(--r);border:1px solid var(--line);cursor:pointer;text-align:left;width:100%}
+.session+.session{margin-top:8px}
+.session:hover{border-color:var(--muted)}
+.session .name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.session.missing{border-color:var(--bad)}
+.star{font-size:11px;font-weight:700}
+.roles label{display:block;margin-top:6px}
+/* feed */
+.feed{flex:1;display:flex;flex-direction:column;min-width:0}
+.top{display:flex;align-items:center;gap:6px;padding:12px 20px;border-bottom:1px solid var(--line)}
+.tab{border:0;color:var(--muted)}.tab.on{color:var(--text);font-weight:600}
+#timeline{flex:1;overflow:auto;padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+.divider{text-align:center;font-size:11.5px;color:var(--muted)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.card.attn{border-color:var(--warn)}.card.problem{border-color:var(--bad)}
+.head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px}
+.msg{white-space:pre-wrap;overflow-wrap:anywhere}
 .ask{background:var(--warn-bg);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:8px}
-.ask .q{font-weight:600;color:var(--warn)}
-.interp{border-left:3px solid var(--muted);padding:4px 8px;font-size:13px;color:var(--muted);background:var(--bg);border-radius:0 6px 6px 0}
-footer{border-top:1px solid var(--line);background:var(--panel);padding:10px 16px;display:flex;flex-direction:column;gap:6px}
-#preview{font-size:12.5px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;min-height:22px}
-#composer{min-height:64px;max-height:240px;resize:vertical}
+.interp{font-size:12.5px;color:var(--muted);border-left:2px solid var(--line);padding-left:8px}
+.deliv{display:flex;flex-direction:column;gap:4px;font-size:12.5px}
+.deliv .r{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.who{font-weight:600;min-width:52px}
+.steps{display:flex;gap:10px;color:var(--muted)}.steps .on{color:var(--ok)}.steps .bad{color:var(--bad)}.steps .warn{color:var(--warn)}
+.err{color:var(--bad);font-size:12px}
+details summary{cursor:pointer;color:var(--muted);font-size:12px;list-style:none}details summary::-webkit-details-marker{display:none}
+details pre{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--soft);border-radius:6px;padding:8px;max-height:260px;overflow:auto;font-size:12px;margin:6px 0 0}
+.thread{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--line);padding-top:8px}
+.ev{display:flex;gap:8px;align-items:baseline;font-size:13.5px}
+.ev .from{font-weight:600;flex:none}.ev .msg{flex:1}
+.ev.peer{background:var(--soft);border-radius:8px;padding:5px 8px}
+.ev .reply{visibility:hidden}.ev:hover .reply{visibility:visible}
+.empty{margin:auto;text-align:center;color:var(--muted);line-height:1.9}
+/* composer */
+footer{border-top:1px solid var(--line);padding:12px 20px;display:flex;flex-direction:column;gap:8px;background:var(--panel)}
+#composer{resize:none;min-height:44px;max-height:220px}
+.to{font-size:12.5px}
+/* modal */
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;z-index:5}
-.modal .box{background:var(--panel);border-radius:12px;width:min(720px,94vw);max-height:86vh;display:flex;flex-direction:column;gap:10px;padding:16px}
-.list{overflow:auto;display:flex;flex-direction:column;gap:6px}
-.item{border:1px solid var(--line);border-radius:8px;padding:8px 10px;cursor:pointer;text-align:left;display:flex;flex-direction:column;gap:2px;background:var(--panel)}
-.item:hover,.item:focus{border-color:var(--text);outline:none}.item.sel{border:2px solid var(--text)}
-.toast{position:fixed;bottom:110px;left:50%;transform:translateX(-50%);background:var(--bad);color:#fff;padding:8px 14px;border-radius:8px;z-index:9;max-width:80vw}
-@media (max-width:860px){main{flex-direction:column}aside{width:auto;max-height:42vh;border-right:0;border-bottom:1px solid var(--line)}}
+.box{background:var(--panel);border-radius:12px;width:min(620px,94vw);max-height:82vh;display:flex;flex-direction:column;gap:10px;padding:16px}
+.list{overflow:auto;display:flex;flex-direction:column;gap:4px}
+.item{text-align:left;border:1px solid transparent;border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:1px}
+.item:hover{background:var(--soft)}.item.sel{border-color:var(--text)}
+.toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--bad);color:#fff;padding:8px 14px;border-radius:8px;z-index:9;max-width:80vw}
+@media (max-width:820px){body{flex-direction:column}aside{width:auto;max-height:40vh;border-right:0;border-bottom:1px solid var(--line)}}
 </style>
 </head>
 <body>
-<header>
-  <h1>Bridge Console</h1>
-  <span id="hdrCodex"></span><span id="hdrClaude"></span><span id="hdrRouter"></span>
-  <span class="spacer"></span>
-  <span id="hdrAttn"></span><span id="hdrDemo"></span>
-</header>
-<main>
-  <aside id="side"></aside>
-  <section id="feed">
-    <div id="tabs"></div>
-    <div id="timeline"></div>
-    <footer>
-      <div id="replyBar" class="row" hidden></div>
-      <div id="preview"></div>
-      <textarea id="composer" placeholder="Chat: ask or talk — goes straight to both (or whoever you @mention), they only answer. Task: work — @codex / @claude / @all assigns it, without an @ the router triages first. (Enter to send, Shift+Enter for a new line)"></textarea>
-      <div class="row">
-        <div class="seg" id="kindSeg" role="group" aria-label="Message type" title="Chat: a question or conversation — sent at once, agents only answer. Task: work — goes to the router unless you @mention who does it."><button data-kind="chat">Chat</button><button data-kind="task">Task</button></div>
-        <button data-insert="@codex ">@codex</button><button data-insert="@claude ">@claude</button><button data-insert="@all ">@all</button>
-        <label class="row" style="gap:4px;font-size:12.5px;color:var(--muted)"><input type="checkbox" id="notifyOther" checked style="width:auto"> Send an FYI copy to the agent that is not assigned</label>
-        <span class="spacer"></span>
-        <button class="primary" id="sendBtn">Send</button>
+<aside id="side"></aside>
+<section class="feed">
+  <div class="top" id="tabs"></div>
+  <div id="timeline"></div>
+  <footer>
+    <div id="replyBar" class="row small muted" hidden></div>
+    <textarea id="composer" rows="2" placeholder="Message…  @codex  @claude  @all"></textarea>
+    <div class="row">
+      <div class="seg" id="kindSeg" title="Chat: they only answer. Task: work; without an @ the router decides who does it.">
+        <button data-kind="chat">Chat</button><button data-kind="task">Task</button>
       </div>
-    </footer>
-  </section>
-</main>
+      <div id="to" class="to row wrap grow"></div>
+      <label class="row small muted" id="fyiBox" title="Send a read-only copy to the agent that is not assigned"><input type="checkbox" id="notifyOther" checked style="width:auto"> FYI copy</label>
+      <button class="primary" id="sendBtn">Send</button>
+    </div>
+  </footer>
+</section>
 <div id="modalRoot"></div>
 <script>
 'use strict';
-const token = (new URLSearchParams(location.hash.slice(1)).get('t')) || sessionStorage.getItem('bridgeConsoleToken') || '';
+const token = new URLSearchParams(location.hash.slice(1)).get('t') || sessionStorage.getItem('bridgeConsoleToken') || '';
 if (token) { sessionStorage.setItem('bridgeConsoleToken', token); history.replaceState(null, '', location.pathname); }
-const LABEL = { codex: 'Codex', claude: 'Claude', user: 'You', system: 'System' };
-const PURPOSE = { route: 'Router — triage only', assign: 'Assigned to do it', observe: 'FYI only', reply: 'Reply', chat: 'Chat — answers only' };
-const KIND = { ack: 'read', progress: 'progress', done: 'done', blocked: 'blocked', question: 'asks you', reply: 'reply', route: 'router decision',
-  peer: 'AI↔AI', manual: 'sent by hand from the Codex panel', choice: 'your choice', cancel: 'cancelled', selection: 'session selection', router: 'router', route_failed: 'router unreachable', peer_limit: 'AI↔AI limit', peer_grant: 'more allowed' };
-const PHASE = { routing: ['Router is triaging', 'muted'], awaiting_user: ['Waiting for you to choose who does it', 'warn'], dispatching: ['Delivering', 'muted'],
-  delivered: ['Delivered — not yet confirmed read', 'muted'], in_progress: ['In progress', 'codex'], done: ['Done', 'ok'], delivery_problem: ['Delivery problem', 'bad'], cancelled: ['Cancelled', 'muted'] };
-let S = null, lastVersion = -1, tab = 'all', replyTo = null, drafts = {}, pending = false;
-let kind = localStorage.getItem('bridgeConsoleKind') === 'chat' ? 'chat' : 'task';
+const AGENTS = ['codex', 'claude'];
+const NAME = { codex: 'Codex', claude: 'Claude', user: 'You', system: '' };
+const PHASE = { routing: ['Triaging', ''], awaiting_user: ['Choose who', 'warn'], dispatching: ['Sending', ''], delivered: ['Sent', ''],
+  in_progress: ['Working', ''], done: ['Done', 'ok'], delivery_problem: ['Not delivered', 'bad'], cancelled: ['Cancelled', ''] };
+const ROLE = { route: 'triage', assign: '', observe: 'FYI', reply: 'reply', chat: '' };
+let S = null, lastVersion = -1, lastAvail = '', tab = 'all', replyTo = null, drafts = {}, pending = false;
+let kind = localStorage.getItem('bridgeConsoleKind') === 'task' ? 'task' : 'chat';
 const $ = id => document.getElementById(id);
 function el(tag, attrs = {}, ...kids) {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
     if (v === undefined || v === null || v === false) continue;
-    if (k === 'class') node.className = v; else if (k.startsWith('on')) node.addEventListener(k.slice(2), v); else if (k === 'text') node.textContent = v; else node.setAttribute(k, v === true ? '' : v);
+    if (k === 'class') node.className = v; else if (k.startsWith('on')) node.addEventListener(k.slice(2), v); else node.setAttribute(k, v === true ? '' : v);
   }
-  for (const kid of kids.flat(Infinity)) if (kid !== null && kid !== undefined && kid !== false) node.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
+  for (const kid of kids.flat(Infinity)) if (kid !== null && kid !== undefined && kid !== false && kid !== '') node.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
   return node;
 }
-const time = ms => ms ? new Date(ms).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
-const dateTime = ms => ms ? new Date(ms).toLocaleString() : '';
-const short = id => id && id.length > 14 ? `${id.slice(0, 8)}…${id.slice(-4)}` : id || '';
-const agentChip = (agent, text) => el('span', { class: `chip ${agent}` }, text ?? LABEL[agent]);
-function toast(message) { const t = el('div', { class: 'toast', role: 'alert' }, message); document.body.append(t); setTimeout(() => t.remove(), 6000); }
+const time = ms => ms ? new Date(ms).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : '';
+const full = ms => ms ? new Date(ms).toLocaleString() : '';
+const who = a => el('span', { class: `from ${a}` }, NAME[a] ?? a);
+function toast(m) { const t = el('div', { class: 'toast', role: 'alert' }, m); document.body.append(t); setTimeout(() => t.remove(), 6000); }
 
 async function api(path, body) {
-  const res = await fetch(path, { method: body === undefined ? 'GET' : 'POST', headers: { 'x-console-token': token, ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
+  const res = await fetch(path, { method: body === undefined ? 'GET' : 'POST',
+    headers: { 'x-console-token': token, ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
     body: body === undefined ? undefined : JSON.stringify(body) });
   const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
@@ -133,316 +132,278 @@ async function act(path, body) { try { const r = await api(path, body); await po
 async function poll(force) {
   try {
     const state = await api('/api/state');
-    if (force || state.version !== lastVersion || JSON.stringify(state.availability) !== JSON.stringify(S?.availability)) { S = state; lastVersion = state.version; render(); }
-    else S = state;
+    const avail = JSON.stringify(state.availability);
+    const changed = force || state.version !== lastVersion || avail !== lastAvail;
+    S = state; lastVersion = state.version; lastAvail = avail;
+    if (changed) render();
   } catch (e) {
-    $('timeline').replaceChildren(el('div', { class: 'empty' }, el('p', {}, el('b', {}, 'Cannot reach the console server.')), el('p', {}, e.message),
-      el('p', {}, 'Reopen it with the URL printed by "node scripts/console.mjs" (the token changes on every start).')));
+    $('timeline').replaceChildren(el('div', { class: 'empty' }, 'Console not reachable.', el('br'), el('span', { class: 'small' }, 'Reopen it with the URL printed by node scripts/console.mjs.')));
   }
 }
 
-function render() { renderHeader(); renderSide(); renderTabs(); renderTimeline(); renderPreview(); }
+function render() { renderSide(); renderTabs(); renderTimeline(); renderComposer(); }
 
-function availabilityChip(agent) {
+/* ---------- sidebar ---------- */
+function availability(agent) {
   const a = S.availability?.[agent];
-  if (!S.selection[agent]) return el('span', { class: 'chip bad' }, 'not selected');
-  if (!a) return el('span', { class: 'chip muted' }, 'checking…');
-  if (a.state === 'available') return el('span', { class: 'chip ok' }, el('span', { class: 'dot' }), 'available', a.status ? ` · ${a.status}` : '');
-  if (a.state === 'stored') return el('span', { class: 'chip warn' }, 'stored, not open (notLoaded)');
-  if (a.state === 'missing') return el('span', { class: 'chip bad' }, 'no longer available');
-  return el('span', { class: 'chip warn' }, 'unknown');
+  if (!a) return ['', 'checking'];
+  return { available: ['ok', a.status || 'available'], stored: ['warn', 'not open'], missing: ['bad', 'unavailable'], unknown: ['warn', 'unknown'] }[a.state] || ['', ''];
 }
-function renderHeader() {
-  for (const agent of ['codex', 'claude']) {
-    const sel = S.selection[agent];
-    const chip = agentChip(agent, null);
-    chip.replaceChildren(el('b', {}, LABEL[agent]), ': ', sel ? (sel.title || short(sel.id)) : '— not selected —');
-    if (S.router === agent) chip.append(' ', el('span', { class: 'router-tag' }, el('span', {}, 'ROUTER')));
-    const a = S.availability?.[agent];
-    if (sel && a && a.state === 'missing') chip.className = 'chip bad';
-    $(agent === 'codex' ? 'hdrCodex' : 'hdrClaude').replaceChildren(chip);
-  }
-  $('hdrRouter').replaceChildren(S.router ? el('span', { class: 'chip muted' }, 'Router: ', el('b', {}, LABEL[S.router])) : el('span', { class: 'chip warn' }, 'No router selected'));
-  const waiting = S.requests.filter(r => r.phase === 'awaiting_user').length;
-  const questions = openQuestions().length;
-  const problems = S.requests.filter(r => r.phase === 'delivery_problem').length;
-  $('hdrAttn').replaceChildren(...[
-    waiting ? el('button', { class: 'chip warn', onclick: () => { tab = 'attn'; render(); } }, `⚑ ${waiting} waiting for your choice`) : null,
-    questions ? el('button', { class: 'chip warn', onclick: () => { tab = 'attn'; render(); } }, `? ${questions} question(s) for you`) : null,
-    problems ? el('button', { class: 'chip bad', onclick: () => { tab = 'problems'; render(); } }, `✕ ${problems} delivery problem(s)`) : null,
-  ].filter(Boolean));
-  $('hdrDemo').replaceChildren(S.demo ? el('span', { class: 'chip warn', title: 'Simulated sessions; nothing is sent to real apps' }, 'DEMO') : '');
-}
-
-function openQuestions() {
-  return S.events.filter(e => e.kind === 'question' && ['codex', 'claude'].includes(e.from) &&
-    !S.requests.some(r => r.replyTo?.eventId === e.id));
-}
-
 function renderSide() {
-  const side = $('side');
-  const focusId = document.activeElement?.id;
-  const parts = [el('h2', {}, 'Participants')];
-  for (const agent of ['codex', 'claude']) {
+  const keep = document.activeElement?.id;
+  const sessions = AGENTS.map(agent => {
     const sel = S.selection[agent];
-    const a = S.availability?.[agent];
-    const card = el('div', { class: `pcard ${agent}` },
-      el('div', { class: 'row' }, agentChip(agent), S.router === agent ? el('span', { class: 'chip muted' }, '★ router') : null, el('span', { class: 'spacer' }), availabilityChip(agent)));
-    if (sel) {
-      card.append(...[el('div', { class: 'title' }, sel.title || '(untitled)'),
-        el('div', { class: 'meta' }, `ID: ${sel.id}`),
-        sel.cwd ? el('div', { class: 'meta' }, `Folder: ${sel.cwd}`) : null,
-        el('div', { class: 'meta' }, agent === 'codex' ? `Discovered via: ${sel.source || '?'} · send route: ${sel.transport || 'auto'}` : `Client: ${sel.entrypoint || '?'}`),
-        el('div', { class: 'meta' }, `Selected ${dateTime(sel.selectedAt)}`)].filter(Boolean));
-      if (a?.state === 'missing') card.append(el('div', { class: 'banner bad' }, a.detail, ' The console never picks another session by itself.'));
-      if (a?.state === 'stored') card.append(el('div', { class: 'banner warn' }, 'This chat is not open. The "auto" route refuses to send; open the chat in Codex, or re-select it with the desktop or terminal route.'));
-      if (a?.state === 'unknown') card.append(el('div', { class: 'banner warn' }, a.detail));
-    } else card.append(el('div', { class: 'meta' }, 'No session selected.'));
-    card.append(el('div', { class: 'row' }, el('button', { onclick: () => openPicker(agent) }, sel ? 'Change…' : 'Choose session…'),
-      sel ? el('button', { class: 'link', onclick: () => act('/api/select', { agent, participant: null }) }, 'Clear') : null));
-    parts.push(card);
-  }
-  parts.push(el('h2', {}, 'Router'), el('div', { class: 'seg' }, ...['codex', 'claude'].map(agent =>
-    el('button', { class: S.router === agent ? 'on' : '', disabled: !S.selection[agent], title: S.selection[agent] ? '' : 'Select a session first',
-      onclick: () => act('/api/config', { router: agent }) }, LABEL[agent]))),
-  el('div', { class: 'meta' }, 'The router reads requests without an @ and decides who should do them; when unsure it asks you. Triage never starts the work.'));
-  parts.push(el('h2', {}, 'Roles & scope'));
-  for (const agent of ['codex', 'claude']) {
+    if (!sel) return el('button', { class: 'session', onclick: () => openPicker(agent) },
+      el('div', { class: 'row' }, el('span', { class: `name ${agent}` }, NAME[agent])), el('span', { class: 'small muted' }, 'Choose a session…'));
+    const [tone, text] = availability(agent);
+    const missing = S.availability?.[agent]?.state === 'missing';
+    return el('button', { class: `session ${missing ? 'missing' : ''}`, onclick: () => openPicker(agent),
+      title: `${sel.title || ''}\nID: ${sel.id}${sel.cwd ? `\nFolder: ${sel.cwd}` : ''}${agent === 'codex' ? `\nRoute: ${sel.transport || 'auto'}` : `\nClient: ${sel.entrypoint || '?'}`}\nClick to change` },
+      el('div', { class: 'row' }, el('span', { class: `small ${agent}` }, NAME[agent]), S.router === agent ? el('span', { class: `star ${agent}`, title: 'Router' }, '★ router') : null,
+        el('span', { class: 'grow' }), el('span', { class: `dot ${tone}` }), el('span', { class: 'small muted' }, text)),
+      el('span', { class: 'name' }, sel.title || sel.id),
+      missing ? el('span', { class: 'small', style: 'color:var(--bad)' }, 'Session gone — click to choose again') : null);
+  });
+  const roles = AGENTS.map(agent => {
     const id = `role-${agent}`;
-    const area = el('textarea', { id, rows: 2, placeholder: agent === 'codex' ? 'e.g. edits the Fusion design' : 'e.g. read-only review, no file edits' });
-    area.value = drafts[id] ?? S.roles[agent] ?? '';
-    area.addEventListener('input', () => { drafts[id] = area.value; });
-    area.addEventListener('change', async () => { await act('/api/config', { roles: { [agent]: area.value } }).catch(() => {}); delete drafts[id]; });
-    parts.push(el('label', { for: id, class: 'meta' }, LABEL[agent]), area);
-  }
-  parts.push(el('div', { class: 'meta' }, 'Roles are sent with every request. A message from the other AI is never new permission from you.'));
-  const limit = S.peerLimit;
-  parts.push(el('h2', {}, 'AI↔AI exchange'), el('div', { class: 'row' },
-    el('span', { class: `chip ${S.peer.count >= limit ? 'bad' : 'muted'}` }, `${S.peer.count}/${limit} messages since your last turn`),
-    S.peer.count >= limit || S.peer.blocked ? el('button', { onclick: () => act('/api/peer-grant', {}) }, 'Allow more') : null),
-  el('div', { class: 'meta' }, 'At the limit the bridge refuses AI↔AI messages between these two sessions until you send something or allow more.'));
-  side.replaceChildren(...parts.filter(Boolean));
-  if (focusId && $(focusId)) $(focusId).focus();
+    const input = el('input', { id, placeholder: agent === 'codex' ? 'e.g. edits the design' : 'e.g. review only, no edits' });
+    input.value = drafts[id] ?? S.roles[agent] ?? '';
+    input.addEventListener('input', () => { drafts[id] = input.value; });
+    input.addEventListener('change', () => act('/api/config', { roles: { [agent]: input.value } }).then(() => delete drafts[id]).catch(() => {}));
+    return el('label', { class: 'small muted' }, NAME[agent], input);
+  });
+  const limit = S.peerLimit, used = S.peer.count;
+  $('side').replaceChildren(
+    el('div', { class: 'brand' }, 'Bridge Console', S.demo ? el('span', { class: 'badge warn', style: 'margin-left:8px' }, 'demo') : null),
+    el('div', {}, el('div', { class: 'label' }, 'Sessions'), ...sessions),
+    el('div', {}, el('div', { class: 'label' }, 'Router'), el('div', { class: 'seg' }, ...AGENTS.map(agent =>
+      el('button', { class: S.router === agent ? 'on' : '', disabled: !S.selection[agent], onclick: () => act('/api/config', { router: agent }) }, NAME[agent])))),
+    el('div', { class: 'roles' }, el('div', { class: 'label' }, 'Roles'), ...roles),
+    el('div', {}, el('div', { class: 'label' }, 'AI ↔ AI'), el('div', { class: 'row small' },
+      el('span', { class: used >= limit ? '' : 'muted', style: used >= limit ? 'color:var(--bad)' : '' }, `${used} / ${limit} messages`),
+      used >= limit || S.peer.blocked ? el('button', { class: 'ghost', onclick: () => act('/api/peer-grant', {}) }, 'Allow more') : null)));
+  if (keep && $(keep)) $(keep).focus();
 }
 
+/* ---------- tabs ---------- */
+const openQuestions = () => S.events.filter(e => e.kind === 'question' && AGENTS.includes(e.from) && !S.requests.some(r => r.replyTo?.eventId === e.id));
 function renderTabs() {
-  const waiting = S.requests.filter(r => r.phase === 'awaiting_user').length + openQuestions().length;
+  const needs = S.requests.filter(r => r.phase === 'awaiting_user').length + openQuestions().length;
   const problems = S.requests.filter(r => r.phase === 'delivery_problem').length;
-  $('tabs').replaceChildren(...[['all', 'All'], ['attn', `Needs me (${waiting})`], ['problems', `Delivery problems (${problems})`], ['peer', 'AI↔AI']].map(([key, label]) =>
-    el('button', { class: tab === key ? 'on' : '', onclick: () => { tab = key; renderTabs(); renderTimeline(); } }, label)));
+  $('tabs').replaceChildren(...[['all', 'All'], ['attn', 'Needs you', needs, 'warn'], ['problems', 'Problems', problems, 'bad'], ['peer', 'AI ↔ AI']].map(([key, label, n, tone]) =>
+    el('button', { class: `tab ${tab === key ? 'on' : ''}`, onclick: () => { tab = key; renderTabs(); renderTimeline(); } }, label, n ? el('span', { class: `badge ${tone}`, style: 'margin-left:6px' }, n) : null)));
 }
 
-function eventView(e) {
-  if (e.from === 'system' || ['selection', 'router'].includes(e.kind)) return el('div', { class: 'ev system' }, `${time(e.at)} · ${e.text}`);
-  const isPeer = e.kind === 'peer' || e.kind === 'manual';
-  const fromLabel = e.kind === 'manual' ? 'You (via Codex panel)' : LABEL[e.from];
-  const node = el('div', { class: `ev ${isPeer ? 'peer' : ''}` },
-    el('div', { class: 'row' }, el('span', { class: `who chip ${e.from === 'user' ? 'user' : e.from}` }, fromLabel), '→',
-      el('span', { class: 'chip muted' }, e.to === 'user' ? 'You' : LABEL[e.to] || e.to), el('span', { class: 'meta' }, `${time(e.at)} · ${KIND[e.kind] || e.kind}`),
-      isPeer ? el('span', { class: `chip ${e.peerStatus === 'submitted' ? 'muted' : e.peerStatus === 'failed' ? 'bad' : 'warn'}` },
-        e.peerStatus === 'submitted' ? 'delivered' : e.peerStatus === 'failed' ? 'not sent' : e.peerStatus || '') : null,
-      ['codex', 'claude'].includes(e.from) && !isPeer ? el('button', { class: 'link', onclick: () => setReply(e) }, 'Reply') : null),
-    el('div', { class: 'body' }, e.text));
-  if (e.error) node.append(el('div', { class: 'err' }, e.error));
-  if (e.decision?.interpretation) node.append(el('div', { class: 'interp' }, 'Router interpretation (not your words): ', e.decision.interpretation));
-  if (e.note) node.append(el('div', { class: 'meta' }, e.note === 'Arrived after the request left routing; it did not change the assignment.' ? 'Arrived after the request was assigned; it changed nothing.' : e.note));
-  return node;
+/* ---------- timeline ---------- */
+function eventRow(e) {
+  if (e.from === 'system' || ['selection', 'router', 'choice', 'cancel', 'peer_grant'].includes(e.kind)) return null;
+  if (e.kind === 'ack' && !e.text?.trim()) return null;
+  if (e.kind === 'ack' && e.text === 'Read the request.') return null;
+  const peer = e.kind === 'peer' || e.kind === 'manual';
+  const from = e.kind === 'manual' ? el('span', { class: 'from' }, 'You') : who(e.from);
+  const tag = peer ? ` → ${NAME[e.to]}` : e.kind === 'question' ? ' asks' : e.kind === 'done' ? ' ✓' : e.kind === 'blocked' ? ' blocked' : '';
+  return el('div', { class: `ev ${peer ? 'peer' : ''}`, title: full(e.at) },
+    el('span', {}, from, el('span', { class: 'muted small' }, tag)),
+    el('span', { class: 'msg' }, e.text, e.decision?.interpretation ? el('div', { class: 'interp' }, `Router's reading: ${e.decision.interpretation}`) : null,
+      e.error ? el('div', { class: 'err' }, e.error) : null),
+    peer && e.peerStatus !== 'submitted' ? el('span', { class: 'badge bad' }, e.peerStatus === 'failed' ? 'not sent' : e.peerStatus) : null,
+    AGENTS.includes(e.from) && !peer ? el('button', { class: 'ghost small reply', onclick: () => setReply(e) }, 'Reply') : null);
 }
 
-function deliveryRows(r) {
-  const rows = [];
-  for (const d of r.deliveries) {
-    const steps = el('div', { class: 'steps' });
+function deliveries(r) {
+  const rows = r.deliveries.map(d => {
     const status = d.stale ? 'uncertain' : d.status;
-    if (status === 'pending' || status === 'sending') steps.append(el('span', { class: 'step' }, status === 'pending' ? 'queued' : 'sending…'));
-    else if (status === 'failed') steps.append(el('span', { class: 'step bad' }, '✕ not delivered'));
-    else if (status === 'uncertain') steps.append(el('span', { class: 'step warn' }, '? may or may not have arrived'));
-    else steps.append(el('span', { class: 'step on' }, '✓ delivered'));
-    if (d.purpose !== 'route') {
-      steps.append(el('span', { class: `step ${d.readAt ? 'on' : ''}`, title: 'Set only when the receiving session itself reports back' }, d.readAt ? `✓ read ${time(d.readAt)}` : 'not confirmed read'));
-      if (d.purpose === 'chat') steps.append(el('span', { class: `step ${d.doneAt ? 'on' : ''}` }, d.doneAt ? `✓ answered ${time(d.doneAt)}` : 'no answer yet'));
-      else if (d.purpose === 'assign' || d.purpose === 'reply') steps.append(d.blockedAt && !d.doneAt ? el('span', { class: 'step bad' }, 'blocked')
-        : el('span', { class: `step ${d.doneAt ? 'on' : ''}` }, d.doneAt ? `✓ done ${time(d.doneAt)}` : 'not done'));
-    } else steps.append(el('span', { class: `step ${r.routing?.decision ? 'on' : ''}` }, r.routing?.decision ? '✓ triaged' : 'waiting for router'));
-    const actions = el('div', { class: 'row' });
-    if (status === 'failed') actions.append(el('button', { onclick: () => act('/api/retry', { requestId: r.id, deliveryId: d.id }) }, `Resend to ${LABEL[d.to]}`));
-    if (status === 'uncertain' && !d.stale) actions.append(el('button', { onclick: () => {
-      if (confirm(`The message to ${LABEL[d.to]} may already have arrived. Did you check ${LABEL[d.to]} and confirm it did NOT arrive?`)) act('/api/retry', { requestId: r.id, deliveryId: d.id, confirmUncertain: true });
-    } }, 'Checked — resend'));
-    rows.push(el('span', {}, agentChip(d.to), ' ', el('span', { class: 'meta' }, PURPOSE[d.purpose])), steps, actions);
-    if (d.error && status !== 'submitted') rows.push(el('div', { class: 'err' }, `${LABEL[d.to]}: ${d.error}`));
-    if (d.body) rows.push(el('details', { style: 'grid-column:1/-1' }, el('summary', {}, `Show what was sent to ${LABEL[d.to]}${d.target ? ` (${d.target.title || short(d.target.id)})` : ''}${d.attempts.length > 1 ? ` · ${d.attempts.length} attempts` : ''}`),
-      el('pre', {}, d.body), d.attempts.length ? el('div', { class: 'meta' }, d.attempts.map(a => `${time(a.at)} → ${short(a.target || '')} ${a.status}${a.error ? `: ${a.error}` : ''}`).join('\n')) : null));
-  }
+    const steps = el('span', { class: 'steps' });
+    const step = (on, text, tone) => steps.append(el('span', { class: tone || (on ? 'on' : '') }, on && !tone ? '✓ ' : '', text));
+    if (status === 'failed') step(false, '✕ not delivered', 'bad');
+    else if (status === 'uncertain') step(false, '? uncertain', 'warn');
+    else if (status !== 'submitted') step(false, status === 'pending' ? 'queued' : 'sending…');
+    else {
+      step(true, 'sent');
+      if (d.purpose === 'route') step(Boolean(r.routing?.decision), 'decided');
+      else {
+        step(Boolean(d.readAt), 'read');
+        if (d.purpose === 'chat') step(Boolean(d.doneAt), 'answered');
+        else if (d.purpose !== 'observe') d.blockedAt && !d.doneAt ? step(false, 'blocked', 'bad') : step(Boolean(d.doneAt), 'done');
+      }
+    }
+    const retry = status === 'failed' ? el('button', { class: 'ghost', onclick: () => act('/api/retry', { requestId: r.id, deliveryId: d.id }) }, 'Resend')
+      : status === 'uncertain' && !d.stale ? el('button', { class: 'ghost', onclick: () => {
+        if (confirm(`It may already have reached ${NAME[d.to]}. Checked, and it did not arrive?`)) act('/api/retry', { requestId: r.id, deliveryId: d.id, confirmUncertain: true });
+      } }, 'Resend…') : null;
+    return el('div', {},
+      el('div', { class: 'r' }, el('span', { class: `who ${d.to}` }, NAME[d.to]), ROLE[d.purpose] ? el('span', { class: 'badge' }, ROLE[d.purpose]) : null, steps, retry,
+        d.body ? el('details', {}, el('summary', {}, 'sent text'), el('pre', {}, d.body,
+          d.attempts.length > 1 ? `\n\n— ${d.attempts.length} attempts: ${d.attempts.map(a => `${time(a.at)} ${a.status}`).join(', ')}` : '')) : null),
+      d.error && status !== 'submitted' ? el('div', { class: 'err' }, d.error) : null);
+  });
   return rows.length ? el('div', { class: 'deliv' }, ...rows) : null;
 }
 
-function askBlock(r) {
+function ask(r) {
   const decision = r.routing?.decision;
+  const routing = r.status === 'routing';
   const noteId = `note-${r.id}`;
-  const note = el('textarea', { id: noteId, rows: 2, placeholder: 'Add details (optional) — sent verbatim with the request' });
+  const note = el('input', { id: noteId, placeholder: 'Add a note (optional)' });
   note.value = drafts[noteId] ?? '';
   note.addEventListener('input', () => { drafts[noteId] = note.value; });
   const choose = choice => act('/api/choose', { requestId: r.id, choice, note: note.value }).then(() => delete drafts[noteId]).catch(() => {});
-  const routing = r.status === 'routing';
-  const question = routing ? `Router ${LABEL[r.routing.router]} is triaging. You can choose directly now:`
-    : decision?.question || (decision?.assignee === 'both' ? 'The router proposes both. Confirm who does it:' : 'Who should carry out this request?');
-  return el('div', { class: 'ask' }, el('div', { class: 'q' }, routing ? '' : '⚑ ', question),
-    decision?.interpretation ? el('div', { class: 'interp' }, `Router interpretation (${LABEL[r.routing.router]}, not your words): ${decision.interpretation}`) : null,
-    decision?.options?.length ? el('div', { class: 'meta' }, `Router suggests: ${decision.options.join(' · ')}`) : null,
+  return el('div', { class: 'ask' },
+    el('div', { class: 'small', style: 'font-weight:600;color:var(--warn)' }, routing ? `${NAME[r.routing.router]} is deciding… or choose now:` : decision?.question || 'Who should do this?'),
+    decision?.interpretation ? el('div', { class: 'interp' }, `Router's reading: ${decision.interpretation}`) : null,
     routing ? null : note,
-    el('div', { class: 'row' }, el('button', { class: routing ? '' : 'primary', onclick: () => choose('codex') }, 'Codex does it'),
-      el('button', { class: routing ? '' : 'primary', onclick: () => choose('claude') }, 'Claude does it'),
-      el('button', { onclick: () => choose('both') }, 'Both (each in its role)'), el('span', { class: 'spacer' }),
-      el('button', { class: 'link', onclick: () => act('/api/cancel', { requestId: r.id }) }, 'Cancel request')),
-    el('div', { class: 'meta' }, 'Nobody starts working until you choose.'));
+    el('div', { class: 'row wrap' }, ...[['codex', 'Codex'], ['claude', 'Claude'], ['both', 'Both']].map(([c, l]) => el('button', { class: routing ? '' : 'primary', onclick: () => choose(c) }, l)),
+      el('span', { class: 'grow' }), el('button', { class: 'ghost small', onclick: () => act('/api/cancel', { requestId: r.id }) }, 'Cancel')));
 }
 
-function requestCard(r, events) {
-  const [phaseText, phaseClass] = PHASE[r.phase] || [r.phase, 'muted'];
-  const card = el('article', { class: `card from-user ${r.phase === 'awaiting_user' ? 'attn' : ''} ${r.phase === 'delivery_problem' ? 'problem' : ''}`, id: `req-${r.id}` });
-  const recipients = r.status === 'routing' || r.status === 'awaiting_user'
-    ? [el('span', { class: 'chip muted' }, `→ Router ${LABEL[r.routing?.router]} (triage only)`)]
-    : r.kind === 'chat' ? r.assignees.map(a => agentChip(a, `${LABEL[a]}: answers`))
-    : [...r.assignees.map(a => agentChip(a, `${LABEL[a]}: ${r.mode === 'reply' ? 'reply' : 'does it'}`)), ...r.observers.map(a => el('span', { class: 'chip muted' }, `${LABEL[a]}: FYI`))];
-  card.append(...[el('div', { class: 'chead' }, el('b', {}, `#${r.id}`), el('span', { class: 'chip user' }, 'You'), ...recipients,
-    el('span', {}, dateTime(r.createdAt)), el('span', { class: 'spacer' }), el('span', { class: `chip ${phaseClass}` }, phaseText)),
-  r.replyTo ? el('div', { class: 'meta' }, `↳ replying to ${LABEL[r.replyTo.from]} (${r.replyTo.eventId}${r.replyTo.requestId ? ` in #${r.replyTo.requestId}` : ''})`) : null,
-  el('div', { class: 'body' }, r.message),
-  r.mode === 'mention' ? el('div', { class: 'meta' }, 'You named the executor with @ — the router was not involved.') : null,
-  r.kind === 'chat' ? el('div', { class: 'meta' }, r.assignedBy === 'router' ? `Router ${LABEL[r.routing.router]} saw a question, not a task: sent for answers only; nobody acts on it.` : 'Chat: sent for answers only; nobody acts on it.') : null,
-  r.clarification ? el('div', { class: 'meta' }, `You chose: ${r.clarification.choice === 'both' ? 'both' : LABEL[r.clarification.choice]}${r.clarification.overrodeRouter ? ' (before the router answered)' : ''}${r.clarification.note ? ` — "${r.clarification.note}"` : ''}`) : null,
-  r.assignedBy === 'router' && r.kind !== 'chat' ? el('div', { class: 'meta' }, `Router ${LABEL[r.routing.router]} assigned ${r.assignees.map(a => LABEL[a]).join(' + ')} because the request clearly names the executor.`) : null,
-  r.assignedBy === 'router' && r.routing?.decision?.interpretation ? el('div', { class: 'interp' }, `Router interpretation (not your words): ${r.routing.decision.interpretation}`) : null,
-  ['routing', 'awaiting_user'].includes(r.status) ? askBlock(r) : null,
-  deliveryRows(r)].filter(Boolean));
-  if (events.length) card.append(el('div', { class: 'thread' }, ...events.map(eventView)));
-  return card;
+function card(r, events) {
+  const [phase, tone] = PHASE[r.phase] || [r.phase, ''];
+  const waiting = r.status === 'routing' || r.status === 'awaiting_user';
+  const to = waiting ? [el('span', { class: 'muted' }, `→ router ${NAME[r.routing?.router]}`)]
+    : [el('span', { class: 'muted' }, '→'), ...r.assignees.map(a => el('span', { class: a, style: 'font-weight:600' }, NAME[a])),
+      ...r.observers.map(a => el('span', { class: 'muted' }, `(FYI ${NAME[a]})`))];
+  const thread = events.map(eventRow).filter(Boolean);
+  return el('article', { class: `card ${r.phase === 'awaiting_user' ? 'attn' : ''} ${r.phase === 'delivery_problem' ? 'problem' : ''}` },
+    el('div', { class: 'head' }, el('span', { class: 'muted' }, `#${r.id}`), el('b', {}, 'You'), ...to,
+      r.kind === 'chat' ? el('span', { class: 'badge' }, 'chat') : null,
+      el('span', { class: 'grow' }), el('span', { class: 'muted', title: full(r.createdAt) }, time(r.createdAt)), el('span', { class: `badge ${tone}` }, phase)),
+    r.replyTo ? el('div', { class: 'small muted' }, `↳ reply to ${NAME[r.replyTo.from]}`) : null,
+    el('div', { class: 'msg' }, r.message),
+    r.clarification?.note ? el('div', { class: 'small muted' }, `Note: ${r.clarification.note}`) : null,
+    !waiting && r.routing?.decision?.interpretation ? el('div', { class: 'interp' }, `Router's reading: ${r.routing.decision.interpretation}`) : null,
+    waiting ? ask(r) : null,
+    deliveries(r),
+    thread.length ? el('div', { class: 'thread' }, ...thread) : null);
 }
 
 function renderTimeline() {
   const box = $('timeline');
-  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
-  const focused = document.activeElement?.id;
-  const byRequest = new Map();
-  const loose = [];
+  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+  const keep = document.activeElement?.id;
+  const byRequest = new Map(), loose = [];
   for (const e of S.events) (e.requestId ? (byRequest.get(e.requestId) || byRequest.set(e.requestId, []).get(e.requestId)) : loose).push(e);
-  const questionIds = new Set(openQuestions().map(e => e.id));
+  const questions = new Set(openQuestions().map(e => e.id));
   let items = [...S.requests.map(r => ({ at: r.createdAt, r })), ...loose.map(e => ({ at: e.at, e }))].sort((a, b) => a.at - b.at);
-  if (tab === 'attn') items = items.filter(i => (i.r && (i.r.phase === 'awaiting_user' || (byRequest.get(i.r.id) || []).some(e => questionIds.has(e.id)))) || (i.e && questionIds.has(i.e.id)));
-  if (tab === 'problems') items = items.filter(i => i.r && i.r.phase === 'delivery_problem');
-  if (tab === 'peer') items = items.filter(i => (i.e && (i.e.kind === 'peer' || i.e.kind === 'manual' || i.e.kind === 'peer_limit')) || (i.r && (byRequest.get(i.r.id) || []).some(e => e.kind === 'peer')));
-  const nodes = items.map(i => i.r ? requestCard(i.r, byRequest.get(i.r.id) || []) : el('div', { class: `card ${i.e.kind === 'question' ? 'attn' : ''}` }, eventView(i.e)));
+  const hasPeer = r => (byRequest.get(r.id) || []).some(e => e.kind === 'peer');
+  if (tab === 'attn') items = items.filter(i => i.r ? i.r.phase === 'awaiting_user' || (byRequest.get(i.r.id) || []).some(e => questions.has(e.id)) : questions.has(i.e.id));
+  if (tab === 'problems') items = items.filter(i => i.r?.phase === 'delivery_problem');
+  if (tab === 'peer') items = items.filter(i => i.r ? hasPeer(i.r) : ['peer', 'manual', 'peer_limit'].includes(i.e.kind));
+  const nodes = items.map(i => {
+    if (i.r) return card(i.r, byRequest.get(i.r.id) || []);
+    const e = i.e;
+    if (e.from === 'system' || ['selection', 'router', 'peer_grant'].includes(e.kind)) return el('div', { class: 'divider', title: full(e.at) }, e.text);
+    const row = eventRow(e);
+    return row ? el('div', { class: `card ${questions.has(e.id) ? 'attn' : ''}` }, row) : null;
+  }).filter(Boolean);
   if (!nodes.length) nodes.push(el('div', { class: 'empty' }, tab === 'all'
-    ? el('div', {}, el('p', {}, el('b', {}, 'Nothing here yet.')), el('p', {}, '1. Choose a Codex chat and a Claude Code session on the left.'), el('p', {}, '2. Choose the router.'), el('p', {}, '3. Send a request: @codex / @claude / @all assigns directly; without an @ the router asks you first.'))
-    : 'No items here.'));
+    ? [el('div', {}, 'Choose a Codex and a Claude session, pick a router,'), el('div', {}, 'then send a message.')] : 'Nothing here.'));
   box.replaceChildren(...nodes);
-  if (focused && $(focused)) $(focused).focus();
+  if (keep && $(keep)) $(keep).focus();
   if (atBottom) box.scrollTop = box.scrollHeight;
 }
 
-function setReply(e) { replyTo = e; renderPreview(); $('composer').focus(); }
-
-function renderPreview() {
-  const bar = $('replyBar');
-  if (replyTo) { bar.hidden = false; bar.replaceChildren(el('span', { class: 'meta' }, `↳ Replying to ${LABEL[replyTo.from]}: "${replyTo.text.slice(0, 120)}${replyTo.text.length > 120 ? '…' : ''}"`), el('button', { class: 'link', onclick: () => { replyTo = null; renderPreview(); } }, 'cancel')); }
-  else bar.hidden = true;
-  const text = $('composer').value;
+/* ---------- composer ---------- */
+function setReply(e) { replyTo = e; renderComposer(); $('composer').focus(); }
+function mentions(text) {
   const found = new Set();
-  for (const m of text.matchAll(/(^|[^\w@])@(codex|claude|all)\b/gi)) { const n = m[2].toLowerCase(); if (n === 'all') { found.add('codex'); found.add('claude'); } else found.add(n); }
-  let assignees = ['codex', 'claude'].filter(a => found.has(a));
-  const notify = $('notifyOther').checked;
-  const parts = [el('span', { class: 'meta' }, 'Recipients:')];
-  let problem = '';
-  if (!assignees.length && replyTo) assignees = [replyTo.from];
+  for (const m of text.matchAll(/(^|[^\w@])@(codex|claude|all)\b/gi)) { const n = m[2].toLowerCase(); if (n === 'all') AGENTS.forEach(a => found.add(a)); else found.add(n); }
+  return AGENTS.filter(a => found.has(a));
+}
+function renderComposer() {
+  const bar = $('replyBar');
+  bar.hidden = !replyTo;
+  if (replyTo) bar.replaceChildren(`↳ Replying to ${NAME[replyTo.from]}: ${replyTo.text.slice(0, 80)}${replyTo.text.length > 80 ? '…' : ''}`,
+    el('button', { class: 'ghost', onclick: () => { replyTo = null; renderComposer(); } }, '×'));
   document.querySelectorAll('#kindSeg button').forEach(b => b.classList.toggle('on', b.dataset.kind === kind));
-  $('notifyOther').parentElement.hidden = kind === 'chat';
-  if (kind === 'chat' && !replyTo) {
-    const to = assignees.length ? assignees : ['codex', 'claude'].filter(a => S?.selection[a]);
-    for (const a of to) parts.push(agentChip(a, `${LABEL[a]} — answers only`));
-    if (!to.length) problem = 'Select a session first.';
-    for (const a of to) if (!S?.selection[a]) problem = `No ${LABEL[a]} session selected.`;
-  } else if (assignees.length) {
-    for (const a of assignees) parts.push(agentChip(a, `${LABEL[a]} — ${!found.size && replyTo ? 'reply' : 'does it'}`));
-    if (!(!found.size && replyTo) && notify) for (const a of ['codex', 'claude'].filter(a => !assignees.includes(a))) parts.push(el('span', { class: 'chip muted' }, `${LABEL[a]} — FYI only`));
-    for (const a of assignees) if (!S?.selection[a]) problem = `No ${LABEL[a]} session selected.`;
-  } else if (S?.router) {
-    parts.push(el('span', { class: 'chip warn' }, `Router ${LABEL[S.router]} triages first — nobody starts until the executor is clear`));
-  } else problem = 'No router: choose one, or use @codex / @claude / @all.';
-  if (problem) parts.push(el('span', { class: 'chip bad' }, problem));
-  $('preview').replaceChildren(...parts);
+  const text = $('composer').value;
+  let named = mentions(text);
+  const parts = [];
+  let problem = '';
+  const sel = a => S?.selection[a];
+  if (replyTo && !named.length) { named = [replyTo.from]; parts.push('to ', el('b', { class: replyTo.from }, NAME[replyTo.from])); }
+  else if (kind === 'chat') {
+    const to = named.length ? named : AGENTS.filter(sel);
+    to.forEach((a, i) => parts.push(i ? ', ' : 'to ', el('b', { class: a }, NAME[a])));
+    if (!to.length) problem = 'choose a session';
+    named = to;
+  } else if (named.length) {
+    named.forEach((a, i) => parts.push(i ? ' + ' : 'assign ', el('b', { class: a }, NAME[a])));
+  } else if (S?.router) parts.push(el('span', {}, 'router ', el('b', { class: S.router }, NAME[S.router]), ' decides who does it'));
+  else problem = 'choose a router, or @mention';
+  for (const a of named) if (!sel(a)) problem = `no ${NAME[a]} session`;
+  $('to').replaceChildren(problem ? el('span', { style: 'color:var(--bad)' }, problem) : el('span', { class: 'muted' }, ...parts));
+  $('fyiBox').hidden = kind === 'chat' || Boolean(replyTo);
   $('sendBtn').disabled = pending || !text.trim() || Boolean(problem);
 }
 
 async function send() {
   const message = $('composer').value;
-  if (!message.trim() || pending) return;
-  pending = true; renderPreview();
+  if (!message.trim() || pending || $('sendBtn').disabled) return;
+  pending = true; renderComposer();
   const clientId = sessionStorage.getItem('bridgeConsoleDraftId') || crypto.randomUUID();
   sessionStorage.setItem('bridgeConsoleDraftId', clientId);
   try {
     await act('/api/submit', { clientId, message, replyTo: replyTo?.id, notifyOther: $('notifyOther').checked, kind });
-    $('composer').value = ''; replyTo = null; sessionStorage.removeItem('bridgeConsoleDraftId'); sessionStorage.removeItem('bridgeConsoleDraft');
-    const box = $('timeline'); box.scrollTop = box.scrollHeight;
-  } catch {} finally { pending = false; renderPreview(); }
+    $('composer').value = ''; replyTo = null;
+    sessionStorage.removeItem('bridgeConsoleDraftId'); sessionStorage.removeItem('bridgeConsoleDraft');
+    $('timeline').scrollTop = $('timeline').scrollHeight;
+  } catch {} finally { pending = false; autosize(); renderComposer(); }
 }
 
+/* ---------- session picker ---------- */
 async function openPicker(agent) {
   let data = null, query = '', chosen = null, transport = S.selection.codex?.transport || 'auto';
-  const root = $('modalRoot');
-  const close = () => root.replaceChildren();
-  const listBox = el('div', { class: 'list' }, el('div', { class: 'meta' }, 'Looking for sessions…'));
-  const search = el('input', { placeholder: 'Search by title, folder or ID', 'aria-label': 'Search' });
-  const confirmBtn = el('button', { class: 'primary', disabled: true }, 'Select this session');
-  const transportSel = agent === 'codex' ? el('select', { 'aria-label': 'Codex send route' }, ...[['auto', 'auto — daemon if loaded there, otherwise Desktop'], ['desktop', 'desktop — Codex Desktop'], ['terminal', 'terminal — Codex CLI (daemon/queue)']].map(([v, l]) => el('option', { value: v }, l))) : null;
-  if (transportSel) { transportSel.value = transport; transportSel.addEventListener('change', () => { transport = transportSel.value; }); }
-  const warnings = el('div', {});
+  const close = () => $('modalRoot').replaceChildren();
+  const list = el('div', { class: 'list' }, el('div', { class: 'small muted' }, 'Loading…'));
+  const notes = el('div', { class: 'small muted' });
+  const search = el('input', { placeholder: 'Search' });
+  const ok = el('button', { class: 'primary', disabled: true }, 'Select');
+  const route = agent === 'codex' ? el('select', { title: 'How to reach this Codex chat' },
+    ...[['auto', 'auto'], ['desktop', 'desktop'], ['terminal', 'terminal']].map(([v, l]) => el('option', { value: v }, `route: ${l}`))) : null;
+  if (route) { route.value = transport; route.style.width = 'auto'; route.addEventListener('change', () => { transport = route.value; }); }
   function draw() {
-    const items = (agent === 'codex' ? data?.codex : data?.claude);
-    if (!items) { listBox.replaceChildren(el('div', { class: 'banner bad' }, `Could not list ${LABEL[agent]} sessions.`)); return; }
+    const items = data?.[agent];
+    if (!items) { list.replaceChildren(el('div', { class: 'err' }, `Could not list ${NAME[agent]} sessions.`)); return; }
     const q = query.trim().toLowerCase();
     const shown = items.filter(i => !q || `${i.title}\n${i.cwd}\n${i.id}`.toLowerCase().includes(q));
-    listBox.replaceChildren(...(shown.length ? shown.map(i => el('button', { class: `item ${chosen?.id === i.id ? 'sel' : ''}`, onclick: () => { chosen = i; confirmBtn.disabled = false; draw(); } },
-      el('div', { class: 'row' }, el('b', {}, i.title || '(untitled)'), S.selection[agent]?.id === i.id ? el('span', { class: 'chip muted' }, 'selected') : null,
-        el('span', { class: 'spacer' }), el('span', { class: `chip ${['notLoaded'].includes(i.status) ? 'warn' : 'muted'}` }, i.status || '?')),
-      el('div', { class: 'meta' }, `ID: ${i.id}`), i.cwd ? el('div', { class: 'meta' }, `Folder: ${i.cwd}`) : null,
-      el('div', { class: 'meta' }, agent === 'codex' ? `Discovered via: ${i.source}${i.host_id ? ` · ${i.host_id}` : ''}` : `Client: ${i.entrypoint}${i.last_activity_at ? ` · active ${dateTime(i.last_activity_at)}` : ''}`)))
-      : [el('div', { class: 'meta' }, 'No matching session.')]));
+    list.replaceChildren(...(shown.length ? shown.map(i => el('button', { class: `item ${chosen?.id === i.id ? 'sel' : ''}`,
+      onclick: () => { chosen = i; ok.disabled = false; draw(); }, ondblclick: () => { chosen = i; ok.click(); } },
+      el('div', { class: 'row' }, el('b', { class: 'grow' }, i.title || '(untitled)'), S.selection[agent]?.id === i.id ? el('span', { class: 'badge' }, 'current') : null,
+        el('span', { class: `badge ${i.status === 'notLoaded' ? 'warn' : ''}` }, i.status === 'notLoaded' ? 'not open' : i.status || '?')),
+      el('div', { class: 'small muted' }, [i.cwd, agent === 'codex' ? i.source : i.entrypoint].filter(Boolean).join(' · ')),
+      el('div', { class: 'small muted' }, i.id))) : [el('div', { class: 'small muted' }, 'No sessions.')]));
   }
   async function load() {
-    listBox.replaceChildren(el('div', { class: 'meta' }, 'Looking for sessions…'));
-    try { data = await api('/api/sessions'); warnings.replaceChildren(...data.warnings.map(w => el('div', { class: 'banner warn' }, w))); } catch (e) { data = {}; warnings.replaceChildren(el('div', { class: 'banner bad' }, e.message)); }
+    list.replaceChildren(el('div', { class: 'small muted' }, 'Loading…'));
+    try { data = await api('/api/sessions'); notes.replaceChildren(...data.warnings.map(w => el('div', {}, w))); }
+    catch (e) { data = {}; notes.replaceChildren(el('div', { class: 'err' }, e.message)); }
     draw();
   }
   search.addEventListener('input', () => { query = search.value; draw(); });
-  confirmBtn.addEventListener('click', async () => {
-    if (!chosen) return;
-    await act('/api/select', { agent, participant: { ...chosen, ...(agent === 'codex' ? { transport } : {}) } }).then(close).catch(() => {});
-  });
-  root.replaceChildren(el('div', { class: 'modal', onclick: e => { if (e.target.classList.contains('modal')) close(); } },
-    el('div', { class: 'box', role: 'dialog', 'aria-label': `Choose ${LABEL[agent]} session` },
-      el('div', { class: 'row' }, el('b', {}, `Choose ${agent === 'codex' ? 'a Codex chat' : 'a Claude Code session'}`), el('span', { class: 'spacer' }), el('button', { onclick: load }, 'Refresh'), el('button', { onclick: close }, 'Close')),
-      el('div', { class: 'meta' }, agent === 'claude' ? 'Lists running Claude Code sessions with a live inbox. Re-select after /clear or /resume.' : 'From Codex Desktop and the Codex daemon. "Discovered via" is how it was found, not which client has it open.'),
-      search, warnings, listBox, transportSel ? el('label', { class: 'meta' }, 'Route for sending to Codex', transportSel) : null,
-      el('div', { class: 'row' }, el('span', { class: 'spacer' }), confirmBtn))));
+  ok.addEventListener('click', () => chosen && act('/api/select', { agent, participant: { ...chosen, ...(agent === 'codex' ? { transport } : {}) } }).then(close).catch(() => {}));
+  $('modalRoot').replaceChildren(el('div', { class: 'modal', onclick: e => { if (e.target.classList.contains('modal')) close(); } },
+    el('div', { class: 'box', role: 'dialog', 'aria-label': `Choose ${NAME[agent]} session` },
+      el('div', { class: 'row' }, el('b', { class: `grow ${agent}` }, `${NAME[agent]} session`), el('button', { class: 'ghost', onclick: load }, 'Refresh'), el('button', { class: 'ghost', onclick: close }, '×')),
+      search, list, notes,
+      el('div', { class: 'row' }, S.selection[agent] ? el('button', { class: 'ghost', onclick: () => act('/api/select', { agent, participant: null }).then(close).catch(() => {}) }, 'Clear') : null,
+        el('span', { class: 'grow' }), route, ok))));
   search.focus();
   load();
 }
 
-document.querySelectorAll('[data-insert]').forEach(b => b.addEventListener('click', () => {
-  const c = $('composer'); const at = c.selectionStart ?? c.value.length;
-  c.value = c.value.slice(0, at) + b.dataset.insert + c.value.slice(at); c.focus(); renderPreview();
-}));
-$('composer').value = sessionStorage.getItem('bridgeConsoleDraft') || '';
-$('composer').addEventListener('input', () => { sessionStorage.setItem('bridgeConsoleDraft', $('composer').value); sessionStorage.removeItem('bridgeConsoleDraftId'); renderPreview(); });
+/* ---------- wiring ---------- */
+const composer = $('composer');
+function autosize() { composer.style.height = 'auto'; composer.style.height = `${Math.min(composer.scrollHeight + 2, 220)}px`; }
+composer.value = sessionStorage.getItem('bridgeConsoleDraft') || '';
+composer.addEventListener('input', () => { sessionStorage.setItem('bridgeConsoleDraft', composer.value); sessionStorage.removeItem('bridgeConsoleDraftId'); autosize(); renderComposer(); });
 // Enter sends, Shift+Enter adds a line. Not while an input method (e.g. Vietnamese Telex) is composing.
-$('composer').addEventListener('keydown', e => {
+composer.addEventListener('keydown', e => {
   if (e.key !== 'Enter' || e.shiftKey || e.isComposing || e.keyCode === 229) return;
   e.preventDefault();
   send();
 });
-$('notifyOther').addEventListener('change', renderPreview);
-document.querySelectorAll('#kindSeg button').forEach(b => b.addEventListener('click', () => { kind = b.dataset.kind; localStorage.setItem('bridgeConsoleKind', kind); renderPreview(); }));
+document.querySelectorAll('#kindSeg button').forEach(b => b.addEventListener('click', () => { kind = b.dataset.kind; localStorage.setItem('bridgeConsoleKind', kind); renderComposer(); }));
+$('notifyOther').addEventListener('change', renderComposer);
 $('sendBtn').addEventListener('click', send);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') $('modalRoot').replaceChildren(); });
 poll(true);
