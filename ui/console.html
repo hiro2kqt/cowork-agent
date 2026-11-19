@@ -81,7 +81,7 @@ footer{border-top:1px solid var(--line);background:var(--panel);padding:10px 16p
     <footer>
       <div id="replyBar" class="row" hidden></div>
       <div id="preview"></div>
-      <textarea id="composer" placeholder="Chat: ask or talk — goes straight to both (or whoever you @mention), they only answer. Task: work — @codex / @claude / @all assigns it, without an @ the router triages first. (Ctrl+Enter to send)"></textarea>
+      <textarea id="composer" placeholder="Chat: ask or talk — goes straight to both (or whoever you @mention), they only answer. Task: work — @codex / @claude / @all assigns it, without an @ the router triages first. (Enter to send, Shift+Enter for a new line)"></textarea>
       <div class="row">
         <div class="seg" id="kindSeg" role="group" aria-label="Message type" title="Chat: a question or conversation — sent at once, agents only answer. Task: work — goes to the router unless you @mention who does it."><button data-kind="chat">Chat</button><button data-kind="task">Task</button></div>
         <button data-insert="@codex ">@codex</button><button data-insert="@claude ">@claude</button><button data-insert="@all ">@all</button>
@@ -435,7 +435,12 @@ document.querySelectorAll('[data-insert]').forEach(b => b.addEventListener('clic
 }));
 $('composer').value = sessionStorage.getItem('bridgeConsoleDraft') || '';
 $('composer').addEventListener('input', () => { sessionStorage.setItem('bridgeConsoleDraft', $('composer').value); sessionStorage.removeItem('bridgeConsoleDraftId'); renderPreview(); });
-$('composer').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } });
+// Enter sends, Shift+Enter adds a line. Not while an input method (e.g. Vietnamese Telex) is composing.
+$('composer').addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || e.shiftKey || e.isComposing || e.keyCode === 229) return;
+  e.preventDefault();
+  send();
+});
 $('notifyOther').addEventListener('change', renderPreview);
 document.querySelectorAll('#kindSeg button').forEach(b => b.addEventListener('click', () => { kind = b.dataset.kind; localStorage.setItem('bridgeConsoleKind', kind); renderPreview(); }));
 $('sendBtn').addEventListener('click', send);
