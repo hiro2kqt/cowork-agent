@@ -71,6 +71,8 @@ Stop it with Ctrl+C. Your selection, router, roles, and history are saved and sh
    A delivery problem shows the error and a **Resend to …** button for that recipient only. A recipient that already received the message is never resent. An *uncertain* delivery may already have arrived, so the console asks you to check before you confirm a resend. *Show what was sent* displays the exact text each session received.
 6. **AI↔AI.** When Codex and Claude message each other with the bridge's `send_to_*` tools, those messages appear in the history, dashed and marked AI↔AI. They are linked to a request when they mention its `#R…` number. Direct AI↔AI messages between the selected pair are capped at 8 per user turn (see the sidebar). At the cap the bridge refuses further ones until you send something or click *Allow more*.
 
+7. **Files.** Attach images, 3D models, or other files with 📎, by pasting, or by dropping them on the page; a message can also be only files. Agents attach results with the `files` argument of `console_post`, and send files to each other with `files` in `send_to_claude` / `send_to_codex`. Each file is copied once into `<state dir>/console/files/`, and the message the agent receives lists the copy's local path to open. Click a preview to open it: images fit the screen (click for actual size), and 3D models (STL, OBJ, PLY, GLB, embedded glTF, 3MF) open in a viewer: drag to rotate, right-drag or Shift+drag to pan, scroll to zoom, double-click to reset, *Up: Z/Y* to switch the up axis. ← and → move between files. The *Files* tab collects every file in the history. Files are limited to 64 MB each and 12 per message. The viewer shows geometry only (no textures; compressed glTF is not supported; STEP/F3D are not supported, so export STL, 3MF, or GLB).
+
 The tabs *Needs you* and *Problems* collect everything that waits for you. **Clear** empties the console history after a confirmation. It keeps your sessions, router, and roles, saves a copy under `<state dir>/console/archive/`, and never touches the Codex or Claude chats themselves.
 
 ## How it works
@@ -83,6 +85,8 @@ The tabs *Needs you* and *Problems* collect everything that waits for you. **Cle
 | Shared state and rules (file-locked JSON) | `lib/console-state.mjs` → `<state dir>/console/coordination.json` |
 | Sending as the user, discovery, AI↔AI history | `consoleTransport()` in `lib/bridge-service.mjs` |
 | Agents' reports and the router's decision | MCP tool `console_post` |
+| Attachments (store, markers, paths) | `lib/console-files.mjs` → `<state dir>/console/files/` |
+| Image and 3D viewer (WebGL, no libraries) | `ui/console-viewer.js` |
 | Simulated sessions for `--demo` | `lib/console-demo.mjs` |
 
 - Every message the console sends starts with `[Bridge Console · request #R… · written by the USER…]`. It states whether the reader is the router (triage only), assigned, or FYI. It quotes your words verbatim, shows any router interpretation separately, and says that messages from the other AI are never new permission from you.
@@ -98,3 +102,4 @@ The tabs *Needs you* and *Problems* collect everything that waits for you. **Cle
 - A stored Codex chat that is not open (`notLoaded`) is refused on the `auto` route. Open it, or re-select it with the `desktop` or `terminal` route.
 - The AI↔AI cap applies to the selected pair while it is selected in the console, even if the console is closed. Clear a session in the console to remove the cap.
 - One console coordinates one Codex chat and one Claude session at a time.
+- Attachments need both agents on the machine that holds the state directory; on the macOS SSH route `send_to_codex` refuses `files`.

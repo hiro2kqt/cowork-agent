@@ -70,6 +70,25 @@ footer{border-top:1px solid var(--line);padding:12px 20px;display:flex;flex-dire
 .list{overflow:auto;display:flex;flex-direction:column;gap:4px}
 .item{text-align:left;border:1px solid transparent;border-radius:8px;padding:8px 10px;display:flex;flex-direction:column;gap:1px}
 .item:hover{background:var(--soft)}.item.sel{border-color:var(--text)}
+.atts{display:flex;flex-wrap:wrap;gap:8px;margin-top:2px}
+.att{border:1px solid var(--line);border-radius:8px;padding:0;overflow:hidden;background:var(--soft);display:flex;flex-direction:column;width:148px;text-align:left}
+.att:hover{border-color:var(--muted)}
+.att .thumb{height:104px;display:flex;align-items:center;justify-content:center;background:var(--soft);font-size:30px;color:var(--muted)}
+.att img{max-width:100%;max-height:104px;display:block}
+.att .cap{padding:4px 7px;font-size:11.5px;background:var(--panel);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;border:1px solid var(--line);border-radius:999px;padding:1px 4px 1px 9px;background:var(--soft)}
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+.gallery .att{width:auto}.gallery .att .thumb{height:130px}.gallery .att img{max-height:130px}
+.viewer{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:8;display:flex;flex-direction:column}
+.viewer .bar{display:flex;align-items:center;gap:8px;padding:10px 14px;color:#eee;font-size:13px}
+.viewer .bar button{color:#eee;border-color:#555}.viewer .bar button:hover{border-color:#aaa}
+.viewer .stage{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;overflow:auto;position:relative}
+.viewer .stage img{max-width:96%;max-height:96%;cursor:zoom-in;background:repeating-conic-gradient(#ccc 0 25%,#fff 0 50%) 0 0/16px 16px}
+.viewer .stage img.actual{max-width:none;max-height:none;cursor:zoom-out}
+.viewer .model{width:min(1200px,96vw);height:100%;border-radius:10px;overflow:hidden}
+.viewer .hint{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);font-size:12px;color:#bbb;pointer-events:none}
+.dropping footer{outline:2px dashed var(--codex);outline-offset:-6px}
 .toast{position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:var(--bad);color:#fff;padding:8px 14px;border-radius:8px;z-index:9;max-width:80vw}
 @media (max-width:820px){body{flex-direction:column}aside{width:auto;max-height:40vh;border-right:0;border-bottom:1px solid var(--line)}}
 </style>
@@ -81,11 +100,14 @@ footer{border-top:1px solid var(--line);padding:12px 20px;display:flex;flex-dire
   <div id="timeline"></div>
   <footer>
     <div id="replyBar" class="row small muted" hidden></div>
+    <div id="pendingFiles" class="chips" hidden></div>
     <textarea id="composer" rows="2" placeholder="Message…  @codex  @claude  @all"></textarea>
     <div class="row">
       <div class="seg" id="kindSeg" title="Chat: they only answer. Task: work; without an @ the router decides who does it.">
         <button data-kind="chat">Chat</button><button data-kind="task">Task</button>
       </div>
+      <button class="ghost" id="attachBtn" title="Attach images, 3D models, or files (you can also paste or drop them)">📎</button>
+      <input type="file" id="fileInput" multiple hidden>
       <div id="to" class="to row wrap grow"></div>
       <label class="row small muted" id="fyiBox" title="Send a read-only copy to the agent that is not assigned"><input type="checkbox" id="notifyOther" checked style="width:auto"> FYI copy</label>
       <button class="primary" id="sendBtn">Send</button>
@@ -93,6 +115,8 @@ footer{border-top:1px solid var(--line);padding:12px 20px;display:flex;flex-dire
   </footer>
 </section>
 <div id="modalRoot"></div>
+<div id="viewerRoot"></div>
+<script src="/console-viewer.js"></script>
 <script>
 'use strict';
 const token = new URLSearchParams(location.hash.slice(1)).get('t') || sessionStorage.getItem('bridgeConsoleToken') || '';
@@ -102,7 +126,8 @@ const NAME = { codex: 'Codex', claude: 'Claude', user: 'You', system: '' };
 const PHASE = { routing: ['Triaging', ''], awaiting_user: ['Choose who', 'warn'], dispatching: ['Sending', ''], delivered: ['Sent', ''],
   in_progress: ['Working', ''], done: ['Done', 'ok'], delivery_problem: ['Not delivered', 'bad'], cancelled: ['Cancelled', ''] };
 const ROLE = { route: 'triage', assign: '', observe: 'FYI', reply: 'reply', chat: '' };
-let S = null, lastVersion = -1, lastAvail = '', tab = 'all', replyTo = null, drafts = {}, pending = false;
+let S = null, lastVersion = -1, lastAvail = '', tab = 'all', replyTo = null, drafts = {}, pending = false, uploading = 0;
+let attached = JSON.parse(sessionStorage.getItem('bridgeConsoleFiles') || '[]');
 let kind = localStorage.getItem('bridgeConsoleKind') === 'task' ? 'task' : 'chat';
 const $ = id => document.getElementById(id);
 function el(tag, attrs = {}, ...kids) {
@@ -128,6 +153,93 @@ async function api(path, body) {
   return data;
 }
 async function act(path, body) { try { const r = await api(path, body); await poll(true); return r; } catch (e) { toast(e.message); throw e; } }
+
+/* ---------- files ---------- */
+const ICON = { image: '🖼', model: '🧊', other: '📄' };
+const bytes = n => n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+const blobs = new Map();
+function fileBlob(id) {
+  if (!blobs.has(id)) blobs.set(id, fetch(`/api/files/${id}`, { headers: { 'x-console-token': token } })
+    .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob(); })
+    .catch(e => { blobs.delete(id); throw e; }));
+  return blobs.get(id);
+}
+const urls = new Map();
+async function fileUrl(id, mime) {
+  if (!urls.has(id)) urls.set(id, URL.createObjectURL(new Blob([await fileBlob(id)], { type: mime })));
+  return urls.get(id);
+}
+const metaOf = id => S?.files?.[id] || attached.find(f => f.id === id) || null;
+/** Hide the "[file …] name: path" lines agents add for each other; the files are shown as tiles. */
+const stripFiles = text => String(text || '').replace(/\n*Attached files \(local copies[^\n]*\):?(\n- \[file [a-f0-9]{16}\][^\n]*)+/g, '').replace(/^- \[file [a-f0-9]{16}\][^\n]*\n?/gm, '').trim();
+function tile(meta, list, index) {
+  const thumb = el('div', { class: 'thumb' }, ICON[meta.kind] || ICON.other);
+  if (meta.kind === 'image') fileUrl(meta.id, meta.mime).then(u => thumb.replaceChildren(el('img', { src: u, alt: meta.name }))).catch(() => {});
+  return el('button', { class: 'att', title: `${meta.name} · ${bytes(meta.size)}${meta.by ? ` · from ${NAME[meta.by] || meta.by}` : ''}`, onclick: () => openViewer(list, index) },
+    thumb, el('span', { class: 'cap' }, meta.name));
+}
+function attachmentsView(ids) {
+  const list = (ids || []).map(metaOf).filter(Boolean);
+  return list.length ? el('div', { class: 'atts' }, ...list.map((m, i) => tile(m, list, i))) : null;
+}
+
+/* ---------- viewer ---------- */
+let viewerClose = null;
+function openViewer(list, index) {
+  viewerClose?.();
+  let mounted = null;
+  const root = $('viewerRoot');
+  const stage = el('div', { class: 'stage' });
+  const title = el('span', { class: 'grow' });
+  const info = el('span', { class: 'small', style: 'color:#bbb' });
+  const upBtn = el('button', { class: 'ghost small', hidden: true }, '');
+  const save = el('button', { class: 'ghost small' }, 'Download');
+  const prev = el('button', { class: 'ghost', title: 'Previous (←)' }, '‹'), next = el('button', { class: 'ghost', title: 'Next (→)' }, '›');
+  const close = () => { mounted?.destroy(); mounted = null; root.replaceChildren(); viewerClose = null; document.removeEventListener('keydown', keys); };
+  const keys = e => {
+    if (e.key === 'Escape') { e.stopPropagation(); close(); }
+    else if (e.key === 'ArrowLeft' && list.length > 1) show(index - 1);
+    else if (e.key === 'ArrowRight' && list.length > 1) show(index + 1);
+  };
+  async function show(i) {
+    index = (i + list.length) % list.length;
+    const meta = list[index];
+    mounted?.destroy(); mounted = null;
+    title.replaceChildren(el('b', {}, meta.name), el('span', { style: 'color:#bbb' }, ` · ${bytes(meta.size)}${meta.by ? ` · ${NAME[meta.by] || meta.by}` : ''}${list.length > 1 ? ` · ${index + 1}/${list.length}` : ''}`));
+    info.textContent = ''; upBtn.hidden = true;
+    prev.hidden = next.hidden = list.length < 2;
+    save.onclick = async () => { const a = el('a', { href: await fileUrl(meta.id, meta.mime), download: meta.name }); a.click(); };
+    stage.replaceChildren(el('span', { style: 'color:#bbb' }, 'Loading…'));
+    try {
+      if (meta.kind === 'image') {
+        const img = el('img', { src: await fileUrl(meta.id, meta.mime), alt: meta.name, title: 'Click to toggle actual size' });
+        img.addEventListener('click', () => img.classList.toggle('actual'));
+        if (list[index] === meta) stage.replaceChildren(img);
+      } else if (meta.kind === 'model') {
+        const buffer = await (await fileBlob(meta.id)).arrayBuffer();
+        const model = await window.BridgeViewer.parseModel(meta.name, buffer);
+        if (list[index] !== meta || !root.firstChild) return;
+        const box = el('div', { class: 'model' });
+        stage.replaceChildren(box, el('div', { class: 'hint' }, 'Drag to rotate · right-drag or Shift+drag to pan · scroll to zoom · double-click to reset'));
+        let up = window.BridgeViewer.defaultUp(meta.name);
+        mounted = window.BridgeViewer.mountModel(box, model, { upAxis: up, dark: matchMedia('(prefers-color-scheme: dark)').matches });
+        const [x, y, z] = mounted.info.size.map(v => +v.toPrecision(4));
+        info.textContent = `${mounted.info.triangles.toLocaleString()} triangles · ${x} × ${y} × ${z}`;
+        upBtn.hidden = false; upBtn.textContent = `Up: ${up.toUpperCase()}`;
+        upBtn.onclick = () => { up = up === 'z' ? 'y' : 'z'; upBtn.textContent = `Up: ${up.toUpperCase()}`; mounted?.setUp(up); };
+      } else stage.replaceChildren(el('div', { style: 'color:#ddd;text-align:center;line-height:2' }, el('div', { style: 'font-size:40px' }, ICON.other), 'No preview for this file type.', el('br'), el('button', { class: 'ghost', style: 'color:#eee', onclick: () => save.click() }, 'Download')));
+    } catch (e) {
+      stage.replaceChildren(el('div', { style: 'color:#f0857c' }, `Cannot show this file: ${e.message}`));
+    }
+  }
+  prev.addEventListener('click', () => show(index - 1));
+  next.addEventListener('click', () => show(index + 1));
+  root.replaceChildren(el('div', { class: 'viewer', role: 'dialog', 'aria-label': 'File viewer', onclick: e => { if (e.target === stage) close(); } },
+    el('div', { class: 'bar' }, prev, next, title, info, upBtn, save, el('button', { class: 'ghost', onclick: close, title: 'Close (Esc)' }, '×')), stage));
+  document.addEventListener('keydown', keys);
+  viewerClose = close;
+  show(index);
+}
 
 async function poll(force) {
   try {
@@ -190,7 +302,7 @@ const openQuestions = () => S.events.filter(e => e.kind === 'question' && AGENTS
 function renderTabs() {
   const needs = S.requests.filter(r => r.phase === 'awaiting_user').length + openQuestions().length;
   const problems = S.requests.filter(r => r.phase === 'delivery_problem').length;
-  $('tabs').replaceChildren(...[['all', 'All'], ['attn', 'Needs you', needs, 'warn'], ['problems', 'Problems', problems, 'bad'], ['peer', 'AI ↔ AI']].map(([key, label, n, tone]) =>
+  $('tabs').replaceChildren(...[['all', 'All'], ['attn', 'Needs you', needs, 'warn'], ['problems', 'Problems', problems, 'bad'], ['peer', 'AI ↔ AI'], ['files', 'Files', Object.keys(S.files || {}).length, '']].map(([key, label, n, tone]) =>
     el('button', { class: `tab ${tab === key ? 'on' : ''}`, onclick: () => { tab = key; renderTabs(); renderTimeline(); } }, label, n ? el('span', { class: `badge ${tone}`, style: 'margin-left:6px' }, n) : null)),
     el('span', { class: 'grow' }),
     el('button', { class: 'ghost small', title: 'Clear this console history (Codex and Claude keep their own chats)', disabled: !S.requests.length && !S.events.length,
@@ -207,7 +319,7 @@ function eventRow(e) {
   const tag = peer ? ` → ${NAME[e.to]}` : e.kind === 'question' ? ' asks' : e.kind === 'done' ? ' ✓' : e.kind === 'blocked' ? ' blocked' : '';
   return el('div', { class: `ev ${peer ? 'peer' : ''}`, title: full(e.at) },
     el('span', {}, from, el('span', { class: 'muted small' }, tag)),
-    el('span', { class: 'msg' }, e.text, e.decision?.interpretation ? el('div', { class: 'interp' }, `Router's reading: ${e.decision.interpretation}`) : null,
+    el('span', { class: 'msg' }, e.attachments ? stripFiles(e.text) : e.text, attachmentsView(e.attachments), e.decision?.interpretation ? el('div', { class: 'interp' }, `Router's reading: ${e.decision.interpretation}`) : null,
       e.error ? el('div', { class: 'err' }, e.error) : null),
     peer && e.peerStatus !== 'submitted' ? el('span', { class: 'badge bad' }, e.peerStatus === 'failed' ? 'not sent' : e.peerStatus) : null,
     AGENTS.includes(e.from) && !peer ? el('button', { class: 'ghost small reply', onclick: () => setReply(e) }, 'Reply') : null);
@@ -272,6 +384,7 @@ function card(r, events) {
       el('span', { class: 'grow' }), el('span', { class: 'muted', title: full(r.createdAt) }, time(r.createdAt)), el('span', { class: `badge ${tone}` }, phase)),
     r.replyTo ? el('div', { class: 'small muted' }, `↳ reply to ${NAME[r.replyTo.from]}`) : null,
     el('div', { class: 'msg' }, r.message),
+    attachmentsView(r.attachments),
     r.clarification?.note ? el('div', { class: 'small muted' }, `Note: ${r.clarification.note}`) : null,
     !waiting && r.routing?.decision?.interpretation ? el('div', { class: 'interp' }, `Router's reading: ${r.routing.decision.interpretation}`) : null,
     waiting ? ask(r) : null,
@@ -279,8 +392,19 @@ function card(r, events) {
     thread.length ? el('div', { class: 'thread' }, ...thread) : null);
 }
 
+function renderGallery(box) {
+  const seen = new Map();
+  const add = (ids, item) => { for (const id of ids || []) if (!seen.has(id) && S.files?.[id]) seen.set(id, { ...S.files[id], from: item }); };
+  for (const r of S.requests) { add(r.attachments, r); }
+  for (const e of S.events) add(e.attachments, e);
+  const list = [...seen.values()].sort((a, b) => b.createdAt - a.createdAt);
+  box.replaceChildren(list.length ? el('div', { class: 'gallery' }, ...list.map((m, i) => tile(m, list, i)))
+    : el('div', { class: 'empty' }, 'No files yet.', el('br'), el('span', { class: 'small' }, 'Images and 3D models that you or the agents attach appear here.')));
+}
+
 function renderTimeline() {
   const box = $('timeline');
+  if (tab === 'files') return renderGallery(box);
   const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
   const keep = document.activeElement?.id;
   const byRequest = new Map(), loose = [];
@@ -336,18 +460,23 @@ function renderComposer() {
   for (const a of named) if (!sel(a)) problem = `no ${NAME[a]} session`;
   $('to').replaceChildren(problem ? el('span', { style: 'color:var(--bad)' }, problem) : el('span', { class: 'muted' }, ...parts));
   $('fyiBox').hidden = kind === 'chat' || Boolean(replyTo);
-  $('sendBtn').disabled = pending || !text.trim() || Boolean(problem);
+  $('sendBtn').disabled = pending || uploading > 0 || (!text.trim() && !attached.length) || Boolean(problem);
+  const chips = $('pendingFiles');
+  chips.hidden = !attached.length && !uploading;
+  chips.replaceChildren(...attached.map(f => el('span', { class: 'chip', title: bytes(f.size) }, `${ICON[f.kind] || ICON.other} ${f.name}`,
+    el('button', { class: 'ghost', style: 'padding:0 4px', title: 'Remove', onclick: () => { attached = attached.filter(x => x !== f); saveAttached(); renderComposer(); } }, '×'))),
+    uploading ? el('span', { class: 'small muted' }, `Uploading ${uploading}…`) : null);
 }
 
 async function send() {
   const message = $('composer').value;
-  if (!message.trim() || pending || $('sendBtn').disabled) return;
+  if ((!message.trim() && !attached.length) || pending || $('sendBtn').disabled) return;
   pending = true; renderComposer();
   const clientId = sessionStorage.getItem('bridgeConsoleDraftId') || crypto.randomUUID();
   sessionStorage.setItem('bridgeConsoleDraftId', clientId);
   try {
-    await act('/api/submit', { clientId, message, replyTo: replyTo?.id, notifyOther: $('notifyOther').checked, kind });
-    $('composer').value = ''; replyTo = null;
+    await act('/api/submit', { clientId, message, replyTo: replyTo?.id, notifyOther: $('notifyOther').checked, kind, attachments: attached.map(f => f.id) });
+    $('composer').value = ''; replyTo = null; attached = []; saveAttached();
     sessionStorage.removeItem('bridgeConsoleDraftId'); sessionStorage.removeItem('bridgeConsoleDraft');
     $('timeline').scrollTop = $('timeline').scrollHeight;
   } catch {} finally { pending = false; autosize(); renderComposer(); }
@@ -408,7 +537,30 @@ composer.addEventListener('keydown', e => {
 document.querySelectorAll('#kindSeg button').forEach(b => b.addEventListener('click', () => { kind = b.dataset.kind; localStorage.setItem('bridgeConsoleKind', kind); renderComposer(); }));
 $('notifyOther').addEventListener('change', renderComposer);
 $('sendBtn').addEventListener('click', send);
-document.addEventListener('keydown', e => { if (e.key === 'Escape') $('modalRoot').replaceChildren(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !viewerClose) $('modalRoot').replaceChildren(); });
+function saveAttached() { sessionStorage.setItem('bridgeConsoleFiles', JSON.stringify(attached)); sessionStorage.removeItem('bridgeConsoleDraftId'); }
+async function upload(files) {
+  for (const file of files) {
+    uploading++; renderComposer();
+    try {
+      const res = await fetch('/api/upload', { method: 'POST', body: file,
+        headers: { 'x-console-token': token, 'content-type': 'application/octet-stream', 'x-file-name': encodeURIComponent(file.name || 'pasted.png') } });
+      const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      if (!attached.some(f => f.id === data.id)) attached.push(data);
+      saveAttached();
+    } catch (e) { toast(`${file.name}: ${e.message}`); }
+    finally { uploading--; renderComposer(); }
+  }
+}
+$('attachBtn').addEventListener('click', () => $('fileInput').click());
+$('fileInput').addEventListener('change', e => { upload([...e.target.files]); e.target.value = ''; });
+composer.addEventListener('paste', e => { const files = [...(e.clipboardData?.files || [])]; if (files.length) { e.preventDefault(); upload(files); } });
+let dragDepth = 0;
+document.addEventListener('dragenter', e => { if (e.dataTransfer?.types.includes('Files')) { dragDepth++; document.body.classList.add('dropping'); } });
+document.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('dropping'); } });
+document.addEventListener('dragover', e => { if (e.dataTransfer?.types.includes('Files')) e.preventDefault(); });
+document.addEventListener('drop', e => { if (!e.dataTransfer?.files.length) return; e.preventDefault(); dragDepth = 0; document.body.classList.remove('dropping'); upload([...e.dataTransfer.files]); });
 poll(true);
 setInterval(() => { if (!document.hidden) poll(false); }, 1500);
 </script>

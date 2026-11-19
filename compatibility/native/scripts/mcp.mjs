@@ -25,6 +25,7 @@ const textProperty = (description, maxLength = 256) => ({ type: 'string', minLen
 const messageId = { ...textProperty('Optional idempotency key: 1–100 ASCII letters, digits, underscores, or hyphens; JavaScript object property names such as constructor, prototype, and __proto__ are reserved. Scoped to this sender and recipient. Reuse with the same recipient and text only when investigating uncertain delivery.', 100),
   pattern: '^[a-zA-Z0-9_-]{1,100}$', not: { enum: ['prototype', ...Object.getOwnPropertyNames(Object.prototype)] } };
 const messageText = textProperty('Information, question, task, or update to send visibly to the selected conversation. The service also enforces a 65536-byte UTF-8 limit.', 65536);
+const filesProperty = description => ({ type: 'array', maxItems: 12, items: textProperty('Absolute path of a local file.', 4096), description });
 const schema = (properties = {}, required = []) => ({ type: 'object', properties, required, additionalProperties: false });
 const outputText = { type: 'string' };
 const endpoint = schema({ app: { type: 'string', enum: ['claude', 'codex'] }, id: outputText,
@@ -83,6 +84,7 @@ export const TOOLS = [
       session_id: textProperty('Exact destination Claude session UUID, found with list_claude_sessions or received in a prior message.'),
       message: messageText,
       message_id: messageId,
+      files: filesProperty('Optional absolute paths of files to share, such as screenshots, renders, or 3D models (STL, OBJ, GLB). Each is copied into the shared Bridge Console store and the message lists the copy\'s path for the recipient to open; the user can view them in the console.'),
     }, ['session_id', 'message']),
     outputSchema: sendOutput,
   },
@@ -95,6 +97,7 @@ export const TOOLS = [
       transport: { type: 'string', enum: ['auto', 'desktop', 'terminal', 'ssh'], description: 'On macOS with an SSH host configured, auto/ssh use only that host and reject local transports. Otherwise auto uses a loaded local daemon thread or Desktop when the daemon has no record or is unavailable. For a stored notLoaded thread, choose desktop or terminal explicitly. Discovery source and creation origin do not prove the current client.' },
       message: messageText,
       message_id: messageId,
+      files: filesProperty('Optional absolute paths of files to share, such as screenshots, renders, or 3D models (STL, OBJ, GLB). Each is copied into the shared Bridge Console store and the message lists the copy\'s path for the recipient to open; the user can view them in the console.'),
     }, ['thread_id', 'message']),
     outputSchema: sendOutput,
   },
@@ -164,7 +167,7 @@ export const TOOLS = [
   {
     name: 'console_post',
     title: 'Report to the user in the Bridge Console',
-    description: 'Post a short report to the user in the Bridge Console, for a request you received from it (its message starts with "[Bridge Console · request #R…]"). Use kind "ack" once you have read the request, "progress" for updates, "question" to ask the user, "done" when your assigned work is finished, "blocked" if you cannot continue, and "reply" for a plain answer. The selected router answers a ROUTING ONLY request with kind "route" and assignee codex, claude, both, or unclear. Works only from the Claude or Codex conversation the user selected in the console; the caller is verified. Writes only local console state; sends nothing to the other agent.',
+    description: 'Post a short report to the user in the Bridge Console, for a request you received from it (its message starts with "[Bridge Console · request #R…]"). Attach screenshots, renders, or 3D models with files (absolute paths) so the user can open them. Use kind "ack" once you have read the request, "progress" for updates, "question" to ask the user, "done" when your assigned work is finished, "blocked" if you cannot continue, and "reply" for a plain answer. The selected router answers a ROUTING ONLY request with kind "route" and assignee codex, claude, both, or unclear. Works only from the Claude or Codex conversation the user selected in the console; the caller is verified. Writes only local console state; sends nothing to the other agent.',
     inputSchema: schema({
       kind: { type: 'string', enum: ['ack', 'progress', 'done', 'blocked', 'question', 'reply', 'route'], description: 'What this report is.' },
       request_id: { ...textProperty('Console request ID such as R12, from the request header.', 20), pattern: '^R[0-9]{1,9}$' },
@@ -174,9 +177,11 @@ export const TOOLS = [
       interpretation: textProperty('kind route only: your reading of the request, shown to the user and the assignee as the router\'s words.', 8000),
       question: textProperty('kind route with assignee unclear or both: the clarifying question for the user.', 2000),
       options: { type: 'array', maxItems: 6, items: textProperty('One choice for the user.', 200), description: 'kind route only: suggested choices.' },
+      files: filesProperty('Optional absolute paths of result files to show the user: images (PNG, JPG, WebP, SVG…), 3D models (STL, OBJ, GLB, PLY), or any other file. They appear in the console as previews the user can open.'),
     }, ['kind']),
     outputSchema: schema({ posted: { type: 'boolean' }, event_id: outputText, applied: { type: 'boolean' }, note: outputText,
-      request_status: outputText }, ['posted', 'event_id', 'applied']),
+      request_status: outputText, files: { type: 'array', items: schema({ id: outputText, name: outputText, kind: outputText }, ['id', 'name', 'kind']) } },
+    ['posted', 'event_id', 'applied']),
   },
 ];
 

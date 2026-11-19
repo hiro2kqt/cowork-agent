@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { defaultStateDir } from '../lib/state-directory.mjs';
 import { createEngine } from '../lib/console-engine.mjs';
 import { readState } from '../lib/console-state.mjs';
+import { MAX_FILE_BYTES, storeBuffer, fileMeta, publicMeta } from '../lib/console-files.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const version = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
@@ -47,6 +48,7 @@ export async function startConsole({ port = 4317, demo = false, stateDir, token 
   }
   const engine = createEngine({ stateDir, transport, log });
   const html = () => fs.readFileSync(path.join(root, 'ui', 'console.html'), 'utf8');
+  const viewer = () => fs.readFileSync(path.join(root, 'ui', 'console-viewer.js'), 'utf8');
   const availability = { codex: null, claude: null };
   let catalog = { claude: [], codex: [], warnings: [], at: 0 };
 
@@ -94,7 +96,7 @@ export async function startConsole({ port = 4317, demo = false, stateDir, token 
     const send = (status, body, type = 'application/json; charset=utf-8') => {
       res.writeHead(status, { 'content-type': type, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff',
         'referrer-policy': 'no-referrer', 'x-frame-options': 'DENY',
-        ...(type.startsWith('text/html') ? { 'content-security-policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src data:; base-uri 'none'; form-action 'none'" } : {}) });
+        ...(type.startsWith('text/html') ? { 'content-security-policy': "default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src data: blob:; base-uri 'none'; form-action 'none'" } : {}) });
       res.end(typeof body === 'string' ? body : JSON.stringify(body));
     };
     try {
@@ -103,11 +105,30 @@ export async function startConsole({ port = 4317, demo = false, stateDir, token 
       if (!allowedHosts.includes(req.headers.host)) return send(421, { error: 'Unexpected Host header.' });
       const url = new URL(req.url, `http://${req.headers.host}`);
       if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) return send(200, html(), 'text/html; charset=utf-8');
-      const handler = routes[`${req.method} ${url.pathname}`];
+      // The viewer is static code with no data in it, so it is served without the token.
+      if (req.method === 'GET' && url.pathname === '/console-viewer.js') return send(200, viewer(), 'text/javascript; charset=utf-8');
+      const fileMatch = /^\/api\/files\/([a-f0-9]{16})$/.exec(url.pathname);
+      const handler = routes[`${req.method} ${url.pathname}`] || (req.method === 'GET' && fileMatch) || (req.method === 'POST' && url.pathname === '/api/upload');
       if (!handler) return send(404, { error: 'Not found.' });
       const given = Buffer.from(String(req.headers['x-console-token'] || ''));
       const expected = Buffer.from(token);
       if (given.length !== expected.length || !crypto.timingSafeEqual(given, expected)) return send(401, { error: 'Open the console with the URL it printed (the token changes on each start).' });
+      if (fileMatch) {
+        const meta = fileMeta(stateDir, fileMatch[1]);
+        if (!meta) return send(404, { error: 'File not found.' });
+        res.writeHead(200, { 'content-type': meta.kind === 'image' ? meta.mime : 'application/octet-stream', 'content-length': meta.size,
+          'cache-control': 'private, max-age=31536000, immutable', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer',
+          'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox", 'content-disposition': 'attachment' });
+        return fs.createReadStream(meta.path).on('error', () => res.destroy()).pipe(res);
+      }
+      if (url.pathname === '/api/upload') {
+        const chunks = [];
+        let size = 0;
+        for await (const chunk of req) { size += chunk.length; if (size > MAX_FILE_BYTES) return send(413, { error: `Files are limited to ${MAX_FILE_BYTES / 1024 / 1024} MB.` }); chunks.push(chunk); }
+        let name = 'file';
+        try { name = decodeURIComponent(String(req.headers['x-file-name'] || 'file')); } catch {}
+        return send(200, publicMeta(storeBuffer(stateDir, name, Buffer.concat(chunks), { by: 'user' })));
+      }
       let body = {};
       if (req.method === 'POST') {
         if (!String(req.headers['content-type'] || '').startsWith('application/json')) return send(415, { error: 'JSON required.' });

@@ -16,6 +16,7 @@ import { openDaemon, listTerminalThreads, readDaemonVersions, readTerminalThread
 import { codexPeerContent } from './codex-peer.mjs';
 import { validateSshHostAlias } from './codex-ssh.mjs';
 import { readState, updateState, applyAgentPost, consumePeerBudget, AGENT_LABEL } from './console-state.mjs';
+import { storePaths, withAttachments } from './console-files.mjs';
 
 export function codexThreadId(metadata = {}) {
   let turn = metadata['x-codex-turn-metadata'];
@@ -522,6 +523,11 @@ export async function executeBridgeTool(name, args = {}, context = {}) {
     ? { kind: 'claude', id: endpoint.sessionId }
     : { kind: 'codex', id: targetThreadId, ...(ssh ? { host_id: `ssh:${ssh.sshHostAlias}` } : {}) } };
   const messageId = args.message_id ?? crypto.randomUUID();
+  // Attached files are copied into the shared console store; the text carries their markers and paths.
+  if (args.files?.length) {
+    if (ssh) throw new Error('Files cannot be attached on the SSH route: the remote Codex host cannot open local paths. Describe the file instead.');
+    args = { ...args, message: withAttachments(args.message, storePaths(config.stateDir, args.files, { by: who.kind })) };
+  }
   const peerText = terminalTarget || ssh ? codexPeerContent({ fromKind: 'claude', fromId: route.from.id, bridgeMessageId: messageId, body: args.message }) : undefined;
   // Refuse before recordMessage reserves the ID, so a message that can never be sent does not spend it as failed.
   const queueRefused = terminalTarget?.queueRoute ? queueTargetRefusal(targetThreadId) || queueRefusal(peerText) : null;
@@ -610,13 +616,14 @@ function consolePost(who, args, config) {
   const selected = state.selection?.[agent];
   if (!selected) throw new Error(`The Bridge Console has no ${AGENT_LABEL[agent]} session selected. Nothing was posted.`);
   if (selected.id !== id) throw new Error(`This ${AGENT_LABEL[agent]} conversation is not the one selected in the Bridge Console. Nothing was posted.`);
+  const files = storePaths(config.stateDir, args.files, { by: agent });
   const result = updateState(config.stateDir, current => {
     if (current.selection?.[agent]?.id !== id) throw new Error('The Bridge Console selection changed. Nothing was posted.');
-    const { event, applied } = applyAgentPost(current, agent, args);
+    const { event, applied } = applyAgentPost(current, agent, args, files.map(file => file.id));
     const request = event.requestId ? current.requests.find(r => r.id === event.requestId) : null;
     return { event_id: event.id, applied, ...(event.note ? { note: event.note } : {}), ...(request ? { request_status: request.status } : {}) };
   });
-  return { posted: true, ...result };
+  return { posted: true, ...result, ...(files.length ? { files: files.map(file => ({ id: file.id, name: file.name, kind: file.kind })) } : {}) };
 }
 
 /** Transport used by the Bridge Console server. The console sends as the user, so it has no caller
